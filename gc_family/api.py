@@ -7,10 +7,12 @@ TypeScript-Typen fürs Next.js-Frontend.
 
 from ninja import NinjaAPI, Schema
 
+from accounts.api import router as accounts_router
 from chores.api import router as chores_router
 
 api = NinjaAPI(title="GC-Family API", version="0.1.0")
 
+api.add_router("/auth", accounts_router)
 api.add_router("/chores", chores_router)
 
 
@@ -23,17 +25,3 @@ class HealthOut(Schema):
 def health(request):
     """Einfacher Health-Check für Monitoring und Frontend-Anbindung."""
     return {"status": "ok", "service": "gc-family"}
-
-
-class MeOut(Schema):
-    authenticated: bool
-    email: str | None = None
-
-
-@api.get("/auth/me", response=MeOut, tags=["auth"])
-def me(request):
-    """Aktueller Nutzer. Wird in Phase 2 um echtes JWT/PIN-Auth erweitert."""
-    user = getattr(request, "user", None)
-    if user and user.is_authenticated:
-        return {"authenticated": True, "email": user.email}
-    return {"authenticated": False, "email": None}

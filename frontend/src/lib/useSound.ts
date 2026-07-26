@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 
 // Akustisches Feedback per Web Audio API — kleine synthetisierte Klänge,
 // damit keine Audiodateien nötig sind. Der AudioContext wird erst bei der
@@ -36,11 +36,9 @@ function playTone(
 
 export function useSound() {
   const ctxRef = useRef<AudioContext | null>(null);
-  const [muted, setMuted] = useState(false);
-
-  useEffect(() => {
-    setMuted(localStorage.getItem(MUTE_KEY) === "1");
-  }, []);
+  const [muted, setMuted] = useState(
+    () => typeof window !== "undefined" && localStorage.getItem(MUTE_KEY) === "1",
+  );
 
   const ensureCtx = useCallback((): AudioContext | null => {
     if (typeof window === "undefined") return null;

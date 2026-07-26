@@ -1,37 +1,57 @@
 "use client";
 
 import { AnimatePresence, motion } from "framer-motion";
+import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 
 import { TaskCard } from "@/components/TaskCard";
 import {
   completeInstance,
   getMembers,
+  getStats,
   getTodayInstances,
   type Instance,
   type Member,
+  type Stats,
 } from "@/lib/api";
+import { useAuth } from "@/lib/AuthProvider";
 import { useSound } from "@/lib/useSound";
 
 const EASE_OUT = [0.23, 1, 0.32, 1] as const;
 
 export default function Dashboard() {
+  const router = useRouter();
+  const { state: authState, logout } = useAuth();
   const [members, setMembers] = useState<Member[]>([]);
   const [instances, setInstances] = useState<Instance[]>([]);
+  const [stats, setStats] = useState<Stats | null>(null);
   const [filter, setFilter] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(false);
   const { play, muted, toggleMuted } = useSound();
 
   useEffect(() => {
-    Promise.all([getMembers(), getTodayInstances()])
-      .then(([m, i]) => {
+    if (authState.kind === "anonymous") {
+      router.replace("/login");
+      return;
+    }
+    if (authState.kind !== "authenticated") {
+      return;
+    }
+    Promise.all([getMembers(), getTodayInstances(), getStats()])
+      .then(([m, i, nextStats]) => {
         setMembers(m);
         setInstances(i);
+        setStats(nextStats);
       })
-      .catch(() => play("error"))
+      .catch(() => {
+        setError(true);
+        play("error");
+      })
       .finally(() => setLoading(false));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [authState.kind, router]);
 
   const visible = useMemo(
     () =>
@@ -53,6 +73,7 @@ export default function Dashboard() {
     play("success");
     try {
       await completeInstance(id, target?.assigned_member_id ?? null);
+      setStats(await getStats());
     } catch {
       play("error");
       setInstances((prev) =>
@@ -66,6 +87,12 @@ export default function Dashboard() {
     day: "numeric",
     month: "long",
   });
+
+  if (authState.kind !== "authenticated") {
+    return <main className="flex flex-1 items-center justify-center">Lädt…</main>;
+  }
+
+  const currentMember = authState.me.member;
 
   return (
     <main className="mx-auto w-full max-w-2xl flex-1 px-4 py-8 sm:px-6">
@@ -82,18 +109,50 @@ export default function Dashboard() {
             {today}
           </p>
         </div>
-        <button
-          type="button"
-          onClick={toggleMuted}
-          aria-label={muted ? "Ton einschalten" : "Ton ausschalten"}
-          className="flex h-11 w-11 cursor-pointer items-center justify-center rounded-full border transition-colors focus-visible:outline-none focus-visible:ring-2"
-          style={{
-            borderColor: "var(--color-border)",
-            ...({ "--tw-ring-color": "var(--color-ring)" } as React.CSSProperties),
-          }}
-        >
-          {muted ? <SpeakerOff /> : <SpeakerOn />}
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => router.push("/login")}
+            aria-label="Profil wechseln"
+            className="cursor-pointer rounded-full border px-3 py-2 text-sm font-bold transition-colors hover:bg-[var(--color-muted)] focus-visible:outline-none focus-visible:ring-2"
+            style={{
+              borderColor: "var(--color-border)",
+              ...({ "--tw-ring-color": "var(--color-ring)" } as React.CSSProperties),
+            }}
+          >
+            {currentMember.emoji} {currentMember.display_name}
+          </button>
+          {currentMember.role === "PARENT" && (
+            <Link
+              href="/manage"
+              className="cursor-pointer rounded-full border px-3 py-2 text-sm font-bold transition-colors hover:bg-[var(--color-muted)] focus-visible:outline-none focus-visible:ring-2"
+              style={{ borderColor: "var(--color-border)" }}
+            >
+              Verwalten
+            </Link>
+          )}
+          <button
+            type="button"
+            onClick={toggleMuted}
+            aria-label={muted ? "Ton einschalten" : "Ton ausschalten"}
+            className="flex h-11 w-11 cursor-pointer items-center justify-center rounded-full border transition-colors focus-visible:outline-none focus-visible:ring-2"
+            style={{
+              borderColor: "var(--color-border)",
+              ...({ "--tw-ring-color": "var(--color-ring)" } as React.CSSProperties),
+            }}
+          >
+            {muted ? <SpeakerOff /> : <SpeakerOn />}
+          </button>
+          <button
+            type="button"
+            onClick={logout}
+            aria-label="Abmelden"
+            className="flex h-11 w-11 cursor-pointer items-center justify-center rounded-full border transition-colors hover:bg-[var(--color-muted)] focus-visible:outline-none focus-visible:ring-2"
+            style={{ borderColor: "var(--color-border)" }}
+          >
+            <LogOut />
+          </button>
+        </div>
       </motion.header>
 
       {/* Fortschrittsbalken */}
@@ -112,6 +171,17 @@ export default function Dashboard() {
           animate={{ width: `${progress}%` }}
           transition={{ duration: 0.4, ease: EASE_OUT }}
         />
+      </div>
+
+      <div className="mb-6 grid grid-cols-2 gap-3">
+        <div className="rounded-2xl border p-4" style={{ borderColor: "var(--color-border)" }}>
+          <p className="text-sm font-bold" style={{ opacity: 0.7 }}>Punkte heute</p>
+          <p className="text-3xl font-bold" style={{ color: "var(--color-secondary)" }}>{stats?.points_today ?? 0}</p>
+        </div>
+        <div className="rounded-2xl border p-4" style={{ borderColor: "var(--color-border)" }}>
+          <p className="text-sm font-bold" style={{ opacity: 0.7 }}>Tage am Stück</p>
+          <p className="text-3xl font-bold" style={{ color: "var(--color-accent)" }}>{stats?.current_streak ?? 0}</p>
+        </div>
       </div>
 
       {/* Mitglieder-Filter */}
@@ -141,6 +211,11 @@ export default function Dashboard() {
       {/* Aufgabenliste */}
       {loading ? (
         <p style={{ opacity: 0.6 }}>Lädt…</p>
+      ) : error ? (
+        <div className="rounded-2xl border border-dashed p-8 text-center" style={{ borderColor: "var(--color-destructive)" }}>
+          <p className="font-bold">Aufgaben konnten nicht geladen werden.</p>
+          <button type="button" onClick={() => window.location.reload()} className="mt-3 cursor-pointer rounded-xl px-4 py-2 font-bold text-white" style={{ backgroundColor: "var(--color-primary)" }}>Erneut versuchen</button>
+        </div>
       ) : visible.length === 0 ? (
         <EmptyState />
       ) : (
@@ -232,6 +307,16 @@ function SpeakerOff() {
       <path d="M11 5 6 9H2v6h4l5 4z" />
       <line x1="22" y1="9" x2="16" y2="15" />
       <line x1="16" y1="9" x2="22" y2="15" />
+    </svg>
+  );
+}
+
+function LogOut() {
+  return (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+      <path d="M10 17l5-5-5-5" />
+      <path d="M15 12H3" />
+      <path d="M21 19V5a2 2 0 0 0-2-2h-7" />
     </svg>
   );
 }

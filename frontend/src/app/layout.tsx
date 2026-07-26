@@ -1,5 +1,8 @@
 import type { Metadata } from "next";
 import { Baloo_2, Comic_Neue } from "next/font/google";
+
+import { AuthProvider } from "@/lib/AuthProvider";
+
 import "./globals.css";
 
 const baloo = Baloo_2({
@@ -29,7 +32,9 @@ export default function RootLayout({
       lang="de"
       className={`${baloo.variable} ${comic.variable} h-full antialiased`}
     >
-      <body className="min-h-full flex flex-col">{children}</body>
+      <body className="min-h-full flex flex-col">
+        <AuthProvider>{children}</AuthProvider>
+      </body>
     </html>
   );
 }
