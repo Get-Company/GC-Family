@@ -7,7 +7,11 @@ TypeScript-Typen fürs Next.js-Frontend.
 
 from ninja import NinjaAPI, Schema
 
+from chores.api import router as chores_router
+
 api = NinjaAPI(title="GC-Family API", version="0.1.0")
+
+api.add_router("/chores", chores_router)
 
 
 class HealthOut(Schema):
