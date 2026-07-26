@@ -1,0 +1,56 @@
+# GC-Family — Produktions-/Server-Setup: Postgres + Django-Backend + Next.js.
+services:
+  db:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${DB_NAME:-gcfamily}
+      POSTGRES_USER: ${DB_USER:-gcfamily}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-changeme}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-gcfamily}"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  backend:
+    build: .
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DJANGO_SECRET_KEY: ${DJANGO_SECRET_KEY:?bitte in .env setzen}
+      DJANGO_DEBUG: ${DJANGO_DEBUG:-False}
+      DJANGO_ALLOWED_HOSTS: ${DJANGO_ALLOWED_HOSTS:-localhost,127.0.0.1,backend}
+      CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-http://localhost:3000}
+      CSRF_TRUSTED_ORIGINS: ${CSRF_TRUSTED_ORIGINS:-http://localhost:3000}
+      DB_HOST: db
+      DB_PORT: "5432"
+      DB_NAME: ${DB_NAME:-gcfamily}
+      DB_USER: ${DB_USER:-gcfamily}
+      DB_PASSWORD: ${DB_PASSWORD:-changeme}
+    volumes:
+      - staticfiles:/app/staticfiles
+    ports:
+      - "8000:8000"
+
+  frontend:
+    build:
+      context: ./frontend
+      args:
+        # In das /api-Rewrite eingebacken (Backend über Servicenamen).
+        BACKEND_URL: http://backend:8000
+    restart: unless-stopped
+    depends_on:
+      - backend
+    # Hinweis: Das /api-Rewrite-Ziel wird über das Build-Arg BACKEND_URL
+    # (siehe build.args) zur Build-Zeit gesetzt, nicht zur Laufzeit.
+    ports:
+      - "3000:3000"
+
+volumes:
+  pgdata:
+  staticfiles:
