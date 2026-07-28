@@ -14,6 +14,10 @@ ARG BACKEND_URL=http://127.0.0.1:8000
 ARG APP_VERSION=dev
 ENV BACKEND_URL=${BACKEND_URL}
 ENV NEXT_PUBLIC_APP_VERSION=${APP_VERSION}
+# Die Produktions-VM hat nur 2 GB RAM und betreibt weitere Dienste. Eine
+# begrenzte V8-Heap-Größe verhindert, dass der einmalige Next-Build SSH und
+# die übrigen Dienste durch Speicherdruck verdrängt.
+ENV NODE_OPTIONS=--max-old-space-size=768
 ENV NEXT_TELEMETRY_DISABLED=1
 RUN npm run build
 
