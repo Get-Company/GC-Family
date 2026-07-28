@@ -7,6 +7,7 @@ import { useCallback, useRef, useState } from "react";
 // ersten Nutzer-Interaktion erzeugt/aufgeweckt (Browser-Autoplay-Regeln).
 
 type SoundName = "success" | "click" | "error";
+export type JingleName = "SPARKLE" | "BELL" | "FANFARE" | "BUBBLE" | "CELEBRATE" | "SOFT" | "DOWNBEAT" | "RAIN" | "PLOP" | "RESET";
 
 const MUTE_KEY = "gcfamily:muted";
 
@@ -76,6 +77,53 @@ export function useSound() {
     [muted, ensureCtx],
   );
 
+  const playJingle = useCallback((jingle: string, fallback: SoundName = "success") => {
+    if (muted) return;
+    const ctx = ensureCtx();
+    if (!ctx) return;
+    // Alle Varianten bleiben absichtlich deutlich unter drei Sekunden.
+    if (jingle === "BELL") {
+      playTone(ctx, 659.25, 0, 0.22, "sine", 0.18);
+      playTone(ctx, 880, 0.16, 0.42, "sine", 0.16);
+    } else if (jingle === "FANFARE") {
+      playTone(ctx, 392, 0, 0.14, "triangle");
+      playTone(ctx, 523.25, 0.14, 0.14, "triangle");
+      playTone(ctx, 783.99, 0.28, 0.5, "triangle", 0.22);
+    } else if (jingle === "BUBBLE") {
+      playTone(ctx, 330, 0, 0.1, "sine", 0.13);
+      playTone(ctx, 440, 0.12, 0.12, "sine", 0.14);
+      playTone(ctx, 620, 0.26, 0.18, "sine", 0.14);
+    } else if (jingle === "CELEBRATE") {
+      playTone(ctx, 523.25, 0, 0.16, "triangle", 0.17);
+      playTone(ctx, 659.25, 0.1, 0.16, "triangle", 0.18);
+      playTone(ctx, 783.99, 0.2, 0.2, "triangle", 0.2);
+      playTone(ctx, 1046.5, 0.3, 0.5, "triangle", 0.22);
+    } else if (jingle === "SOFT") {
+      playTone(ctx, 392, 0, 0.2, "sine", 0.1);
+      playTone(ctx, 330, 0.13, 0.3, "sine", 0.08);
+    } else if (jingle === "DOWNBEAT") {
+      playTone(ctx, 349.23, 0, 0.18, "triangle", 0.12);
+      playTone(ctx, 261.63, 0.15, 0.42, "triangle", 0.12);
+    } else if (jingle === "RAIN") {
+      playTone(ctx, 740, 0, 0.08, "sine", 0.08);
+      playTone(ctx, 620, 0.11, 0.08, "sine", 0.08);
+      playTone(ctx, 520, 0.22, 0.18, "sine", 0.08);
+    } else if (jingle === "PLOP") {
+      playTone(ctx, 260, 0, 0.12, "sine", 0.14);
+      playTone(ctx, 190, 0.1, 0.22, "sine", 0.12);
+    } else if (jingle === "RESET") {
+      playTone(ctx, 440, 0, 0.1, "sine", 0.1);
+      playTone(ctx, 330, 0.12, 0.1, "sine", 0.09);
+      playTone(ctx, 440, 0.25, 0.24, "sine", 0.11);
+    } else if (jingle === "SPARKLE") {
+      playTone(ctx, 659.25, 0, 0.12, "triangle", 0.16);
+      playTone(ctx, 880, 0.09, 0.12, "triangle", 0.18);
+      playTone(ctx, 1046.5, 0.18, 0.32, "triangle", 0.2);
+    } else {
+      play(fallback);
+    }
+  }, [ensureCtx, muted, play]);
+
   const toggleMuted = useCallback(() => {
     setMuted((prev) => {
       const next = !prev;
@@ -84,5 +132,5 @@ export function useSound() {
     });
   }, []);
 
-  return { play, muted, toggleMuted };
+  return { play, playJingle, muted, toggleMuted };
 }

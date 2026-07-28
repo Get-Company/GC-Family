@@ -28,7 +28,7 @@ class ChoreAuthorizationTests(TestCase):
             display_name="Kind",
             role=FamilyMember.Role.CHILD,
         )
-        self.child.set_pin("1234")
+        self.child.set_pin("123456")
         self.child.save(update_fields=["pin_hash"])
         self.chore = Chore.objects.create(
             household=self.household,
@@ -82,7 +82,7 @@ class ChoreAuthorizationTests(TestCase):
     def _child_token(self, parent_token: str) -> str:
         response = self._post(
             "/api/auth/pin",
-            {"member_id": self.child.id, "pin": "1234"},
+            {"member_id": self.child.id, "pin": "123456"},
             parent_token,
         )
         self.assertEqual(response.status_code, 200)
@@ -149,6 +149,177 @@ class ChoreAuthorizationTests(TestCase):
 
         self.assertEqual(stats.status_code, 200)
         self.assertEqual(stats.json(), {"points_today": 5, "current_streak": 1})
+
+    def test_parent_sees_completion_details_and_can_reopen(self):
+        parent_tokens = self._parent_tokens()
+        child_token = self._child_token(parent_tokens["access"])
+        self._post(
+            f"/api/chores/instances/{self.instance.id}/complete",
+            {"member_id": self.child.id},
+            child_token,
+        )
+        listed = self.client.get(
+            "/api/chores/instances",
+            HTTP_AUTHORIZATION=f"Bearer {parent_tokens['access']}",
+        )
+        reopened = self._post(
+            f"/api/chores/instances/{self.instance.id}/reopen",
+            {},
+            parent_tokens["access"],
+        )
+
+        self.assertEqual(listed.status_code, 200)
+        self.assertEqual(listed.json()[0]["completed_by_name"], "Kind")
+        self.assertIsNotNone(listed.json()[0]["completed_at"])
+        self.assertEqual(reopened.status_code, 200)
+        self.assertEqual(reopened.json()["status"], ChoreInstance.Status.OPEN)
+        self.assertIsNone(reopened.json()["completed_by_id"])
+
+        forbidden = self._post(
+            f"/api/chores/instances/{self.instance.id}/reopen",
+            {},
+            child_token,
+        )
+        self.assertEqual(forbidden.status_code, 403)
+
+    def test_parent_cannot_complete_without_a_child_pin_token(self):
+        parent_tokens = self._parent_tokens()
+        response = self._post(
+            f"/api/chores/instances/{self.instance.id}/complete",
+            {"member_id": self.child.id},
+            parent_tokens["access"],
+        )
+
+        self.assertEqual(response.status_code, 403)
+
+    def test_child_cannot_request_previous_weeks(self):
+        old_instance = ChoreInstance.objects.create(
+            chore=self.chore,
+            due_date=dt.date.today() - dt.timedelta(days=8),
+            assigned_member=self.child,
+        )
+        parent_tokens = self._parent_tokens()
+        child_token = self._child_token(parent_tokens["access"])
+        response = self.client.get(
+            f"/api/chores/instances?date_from={old_instance.due_date}&date_to={old_instance.due_date}",
+            HTTP_AUTHORIZATION=f"Bearer {child_token}",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json(), [])
+
+    def test_two_children_can_share_a_task_and_receive_team_bonus(self):
+        sibling = FamilyMember.objects.create(
+            household=self.household,
+            display_name="Geschwister",
+            role=FamilyMember.Role.CHILD,
+        )
+        sibling.set_pin("567890")
+        sibling.save(update_fields=["pin_hash"])
+        first_login = self._post(
+            "/api/auth/child-login", {"member_id": self.child.id, "pin": "123456"}
+        )
+        first_half = self._post(
+            f"/api/chores/instances/{self.instance.id}/complete",
+            {"member_id": self.child.id, "share": True},
+            first_login.json()["access"],
+        )
+        second_login = self._post(
+            "/api/auth/child-login", {"member_id": sibling.id, "pin": "567890"}
+        )
+        second_half = self._post(
+            f"/api/chores/instances/{self.instance.id}/complete",
+            {"member_id": sibling.id, "share": True},
+            second_login.json()["access"],
+        )
+        public_dashboard = self.client.get("/api/public/dashboard")
+        stats = {item["member_id"]: item for item in public_dashboard.json()["stats"]}
+
+        self.assertEqual(first_half.status_code, 200)
+        self.assertEqual(first_half.json()["status"], ChoreInstance.Status.PARTIAL)
+        self.assertEqual(second_half.status_code, 200)
+        self.assertEqual(second_half.json()["status"], ChoreInstance.Status.DONE)
+        self.assertEqual(len(second_half.json()["contributions"]), 2)
+        self.assertEqual(stats[self.child.id]["points"], 3.0)
+        self.assertEqual(stats[sibling.id]["points"], 3.0)
+        self.assertEqual(stats[self.child.id]["completed_tasks"], 0.5)
+
+    def test_manual_task_can_stay_active_over_a_date_range(self):
+        tokens = self._parent_tokens()
+        start = dt.date.today() - dt.timedelta(days=1)
+        end = dt.date.today() + dt.timedelta(days=1)
+        created = self._post(
+            "/api/chores",
+            {
+                "title": "Wochenendprojekt",
+                "points": 8,
+                "is_recurring": False,
+                "default_assignee_id": self.child.id,
+                "due_date": start.isoformat(),
+                "end_date": end.isoformat(),
+            },
+            tokens["access"],
+        )
+        dashboard = self.client.get("/api/public/dashboard")
+        task = next(item for item in dashboard.json()["instances"] if item["title"] == "Wochenendprojekt")
+
+        self.assertEqual(created.status_code, 200)
+        self.assertEqual(created.json()["end_date"], end.isoformat())
+        self.assertEqual(task["active_until"], end.isoformat())
+
+    def test_task_can_be_assigned_to_multiple_children(self):
+        sibling = FamilyMember.objects.create(
+            household=self.household,
+            display_name="Geschwister",
+            role=FamilyMember.Role.CHILD,
+        )
+        sibling.set_pin("567890")
+        sibling.save(update_fields=["pin_hash"])
+        tokens = self._parent_tokens()
+        created = self._post(
+            "/api/chores",
+            {
+                "title": "Gemeinsam zuständig",
+                "points": 4,
+                "is_recurring": False,
+                "default_assignee_ids": [self.child.id, sibling.id],
+                "due_date": dt.date.today().isoformat(),
+            },
+            tokens["access"],
+        )
+        instance = ChoreInstance.objects.get(chore_id=created.json()["id"])
+        sibling_login = self._post(
+            "/api/auth/child-login", {"member_id": sibling.id, "pin": "567890"}
+        )
+        completed = self._post(
+            f"/api/chores/instances/{instance.id}/complete",
+            {"member_id": sibling.id},
+            sibling_login.json()["access"],
+        )
+
+        self.assertEqual(created.status_code, 200)
+        self.assertEqual(set(created.json()["default_assignee_ids"]), {self.child.id, sibling.id})
+        self.assertEqual(set(instance.assigned_members.values_list("id", flat=True)), {self.child.id, sibling.id})
+        self.assertEqual(completed.status_code, 200)
+
+    def test_member_can_undo_own_completed_task(self):
+        parent_tokens = self._parent_tokens()
+        child_token = self._child_token(parent_tokens["access"])
+        completed = self._post(
+            f"/api/chores/instances/{self.instance.id}/complete",
+            {"member_id": self.child.id},
+            child_token,
+        )
+        undone = self._post(
+            f"/api/chores/instances/{self.instance.id}/uncomplete",
+            {},
+            child_token,
+        )
+
+        self.assertEqual(completed.status_code, 200)
+        self.assertEqual(undone.status_code, 200)
+        self.assertEqual(undone.json()["status"], ChoreInstance.Status.OPEN)
+        self.assertEqual(undone.json()["contributions"], [])
 
     def test_parent_can_create_update_and_delete_recurring_chore(self):
         tokens = self._parent_tokens()

@@ -34,8 +34,7 @@ services:
       DB_PASSWORD: ${DB_PASSWORD:-changeme}
     volumes:
       - staticfiles:/app/staticfiles
-    ports:
-      - "8000:8000"
+      - media:/app/media
 
   frontend:
     build:
@@ -43,14 +42,17 @@ services:
       args:
         # In das /api-Rewrite eingebacken (Backend über Servicenamen).
         BACKEND_URL: http://backend:8000
+        # Wird vom GitHub-Tag in den sichtbaren Frontend-Build übernommen.
+        APP_VERSION: ${APP_VERSION:-dev}
     restart: unless-stopped
     depends_on:
       - backend
     # Hinweis: Das /api-Rewrite-Ziel wird über das Build-Arg BACKEND_URL
     # (siehe build.args) zur Build-Zeit gesetzt, nicht zur Laufzeit.
     ports:
-      - "3000:3000"
+      - "127.0.0.1:4711:3000"
 
 volumes:
   pgdata:
   staticfiles:
+  media:

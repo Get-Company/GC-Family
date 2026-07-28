@@ -14,6 +14,21 @@ const nextConfig: NextConfig = {
         source: "/api/:path*",
         destination: `${API_BASE}/api/:path*`,
       },
+      {
+        source: "/media/:path*",
+        destination: `${API_BASE}/media/:path*`,
+      },
+      // Der ausschließlich für Florian sichtbare Django-Admin bleibt über
+      // dieselbe öffentliche Adresse erreichbar; das Backend selbst hat
+      // keinen offenen Host-Port.
+      {
+        source: "/admin/:path*",
+        destination: `${API_BASE}/admin/:path*`,
+      },
+      {
+        source: "/static/:path*",
+        destination: `${API_BASE}/static/:path*`,
+      },
     ];
   },
 };

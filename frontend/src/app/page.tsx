@@ -2,321 +2,165 @@
 
 import { AnimatePresence, motion } from "framer-motion";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { TaskCard } from "@/components/TaskCard";
 import {
   completeInstance,
-  getMembers,
-  getStats,
-  getTodayInstances,
+  getPublicDashboard,
+  reopenInstance,
+  uncompleteInstance,
   type Instance,
   type Member,
-  type Stats,
+  type MemberWeeklyStats,
 } from "@/lib/api";
 import { useAuth } from "@/lib/AuthProvider";
 import { useSound } from "@/lib/useSound";
-
-const EASE_OUT = [0.23, 1, 0.32, 1] as const;
+import { randomInspiration } from "@/lib/inspirations";
 
 export default function Dashboard() {
-  const router = useRouter();
   const { state: authState, logout } = useAuth();
   const [members, setMembers] = useState<Member[]>([]);
   const [instances, setInstances] = useState<Instance[]>([]);
-  const [stats, setStats] = useState<Stats | null>(null);
+  const [stats, setStats] = useState<MemberWeeklyStats[]>([]);
   const [filter, setFilter] = useState<number | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(false);
-  const { play, muted, toggleMuted } = useSound();
+  const [statusFilter, setStatusFilter] = useState<"ALL" | "OPEN" | "DONE">("ALL");
+  const [error, setError] = useState<string | null>(null);
+  const { play, playJingle } = useSound();
+
+  const loadDashboard = useCallback(async () => {
+    const dashboard = await getPublicDashboard();
+    setMembers(dashboard.members);
+    setInstances(dashboard.instances);
+    setStats(dashboard.stats);
+  }, []);
 
   useEffect(() => {
-    if (authState.kind === "anonymous") {
-      router.replace("/login");
-      return;
-    }
-    if (authState.kind !== "authenticated") {
-      return;
-    }
-    Promise.all([getMembers(), getTodayInstances(), getStats()])
-      .then(([m, i, nextStats]) => {
-        setMembers(m);
-        setInstances(i);
-        setStats(nextStats);
-      })
-      .catch(() => {
-        setError(true);
-        play("error");
-      })
-      .finally(() => setLoading(false));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [authState.kind, router]);
+    const timeout = window.setTimeout(() => {
+      void loadDashboard().catch(() => setError("Die Aufgaben konnten nicht geladen werden."));
+    }, 0);
+    return () => window.clearTimeout(timeout);
+  }, [loadDashboard]);
 
-  const visible = useMemo(
-    () =>
-      filter === null
-        ? instances
-        : instances.filter((i) => i.assigned_member_id === filter),
-    [instances, filter],
-  );
+  const currentMember = authState.kind === "authenticated" ? authState.me.member : null;
+  const activeChild = currentMember?.role === "CHILD" ? currentMember : null;
+  const isParent = currentMember?.role === "PARENT";
+  const canAccessBackend = authState.kind === "authenticated" && Boolean(authState.me.user?.can_access_backend);
+  const visible = useMemo(() => {
+    const activeFilter = activeChild?.id ?? filter;
+    return instances.filter((instance) => {
+      const memberMatches = activeFilter === null || instance.assigned_member_ids.includes(activeFilter);
+      const statusMatches = statusFilter === "ALL" || (statusFilter === "DONE" ? instance.status === "DONE" : instance.status !== "DONE");
+      return memberMatches && statusMatches;
+    });
+  }, [activeChild?.id, filter, instances, statusFilter]);
+  const rankedStats = useMemo(() => stats.filter((stat) => stat.points > 0).sort((a, b) => b.points - a.points || b.completed_tasks - a.completed_tasks), [stats]);
 
-  const doneCount = visible.filter((i) => i.status === "DONE").length;
-  const progress = visible.length ? (doneCount / visible.length) * 100 : 0;
-
-  async function handleComplete(id: number) {
-    const target = instances.find((i) => i.id === id);
-    // Optimistisch aktualisieren + Sound.
-    setInstances((prev) =>
-      prev.map((i) => (i.id === id ? { ...i, status: "DONE" } : i)),
-    );
-    play("success");
-    try {
-      await completeInstance(id, target?.assigned_member_id ?? null);
-      setStats(await getStats());
-    } catch {
+  async function handleComplete(id: number, share = false) {
+    if (!currentMember) {
+      setError("Melde dich mit deinem Profil und deiner PIN an, bevor du eine Aufgabe übernimmst.");
       play("error");
-      setInstances((prev) =>
-        prev.map((i) => (i.id === id ? { ...i, status: "OPEN" } : i)),
-      );
+      return;
+    }
+    setError(null);
+    try {
+      const instance = await completeInstance(id, currentMember.id, share);
+      setInstances((current) => current.map((item) => item.id === id ? instance : item));
+      await loadDashboard();
+      playJingle(currentMember.completion_jingle);
+    } catch {
+      const task = instances.find((item) => item.id === id);
+      const owners = task?.assigned_member_names?.join(" und ") || task?.assigned_member_name || "einem anderen Familienmitglied";
+      setError(share ? `${currentMember.display_name}, dein halber Anteil konnte gerade nicht übernommen werden. Prüfe bitte, ob die Aufgabe noch offen ist.` : `${currentMember.display_name}, diese Aufgabe gehört ${owners}. Schön, dass du helfen möchtest – übernimm sie bitte gemeinsam oder frage kurz nach.`);
+      play("error");
     }
   }
 
-  const today = new Date().toLocaleDateString("de-DE", {
-    weekday: "long",
-    day: "numeric",
-    month: "long",
-  });
-
-  if (authState.kind !== "authenticated") {
-    return <main className="flex flex-1 items-center justify-center">Lädt…</main>;
+  async function handleReopen(id: number) {
+    try {
+      const instance = await reopenInstance(id);
+      setInstances((current) => current.map((item) => item.id === id ? instance : item));
+      await loadDashboard();
+    } catch {
+      setError("Die Aufgabe konnte nicht zurückgesetzt werden.");
+    }
   }
 
-  const currentMember = authState.me.member;
+  async function handleUndo(id: number) {
+    try {
+      const instance = await uncompleteInstance(id);
+      setInstances((current) => current.map((item) => item.id === id ? instance : item));
+      await loadDashboard();
+      if (currentMember) {
+        playJingle(currentMember.undo_jingle, "click");
+      }
+    } catch {
+      setError("Dein Anteil konnte nicht zurückgenommen werden.");
+      play("error");
+    }
+  }
+
+  const { start, end } = currentWeekBounds();
 
   return (
-    <main className="mx-auto w-full max-w-2xl flex-1 px-4 py-8 sm:px-6">
-      {/* Kopfbereich */}
-      <motion.header
-        initial={{ opacity: 0, y: -12 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.4, ease: EASE_OUT }}
-        className="mb-6 flex items-start justify-between gap-4"
-      >
+    <main className="mx-auto w-full max-w-6xl flex-1 px-4 py-6 sm:px-6 sm:py-8">
+      <header className="mb-7 flex flex-wrap items-start justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-bold sm:text-4xl">Heute</h1>
-          <p className="text-sm capitalize" style={{ opacity: 0.7 }}>
-            {today}
-          </p>
+          <p className="text-sm font-bold uppercase tracking-wide" style={{ color: "var(--color-secondary)" }}>GC-Family</p>
+          <h1 className="text-4xl font-bold sm:text-5xl">Unsere Woche</h1>
+          <p className="mt-1 text-lg font-bold" style={{ color: "var(--color-primary)" }}>Heute: {formatLongDate(new Date())}</p>
+          <p className="mt-1 text-sm" style={{ opacity: 0.7 }}>{formatDate(start)} – {formatDate(end)} · neue Woche ab Sonntag, 00:00 Uhr</p>
         </div>
-        <div className="flex items-center gap-2">
-          <button
-            type="button"
-            onClick={() => router.push("/login")}
-            aria-label="Profil wechseln"
-            className="cursor-pointer rounded-full border px-3 py-2 text-sm font-bold transition-colors hover:bg-[var(--color-muted)] focus-visible:outline-none focus-visible:ring-2"
-            style={{
-              borderColor: "var(--color-border)",
-              ...({ "--tw-ring-color": "var(--color-ring)" } as React.CSSProperties),
-            }}
-          >
-            {currentMember.emoji} {currentMember.display_name}
-          </button>
-          {currentMember.role === "PARENT" && (
-            <Link
-              href="/manage"
-              className="cursor-pointer rounded-full border px-3 py-2 text-sm font-bold transition-colors hover:bg-[var(--color-muted)] focus-visible:outline-none focus-visible:ring-2"
-              style={{ borderColor: "var(--color-border)" }}
-            >
-              Verwalten
-            </Link>
-          )}
-          <button
-            type="button"
-            onClick={toggleMuted}
-            aria-label={muted ? "Ton einschalten" : "Ton ausschalten"}
-            className="flex h-11 w-11 cursor-pointer items-center justify-center rounded-full border transition-colors focus-visible:outline-none focus-visible:ring-2"
-            style={{
-              borderColor: "var(--color-border)",
-              ...({ "--tw-ring-color": "var(--color-ring)" } as React.CSSProperties),
-            }}
-          >
-            {muted ? <SpeakerOff /> : <SpeakerOn />}
-          </button>
-          <button
-            type="button"
-            onClick={logout}
-            aria-label="Abmelden"
-            className="flex h-11 w-11 cursor-pointer items-center justify-center rounded-full border transition-colors hover:bg-[var(--color-muted)] focus-visible:outline-none focus-visible:ring-2"
-            style={{ borderColor: "var(--color-border)" }}
-          >
-            <LogOut />
-          </button>
+        <div className="flex flex-wrap items-center gap-2">
+          {isParent ? <><Link href="/history" className="button-secondary">Verlauf</Link><Link href="/manage" className="button-secondary">Verwalten</Link>{canAccessBackend && <Link href="/admin/" className="button-secondary">Backend</Link>}<button type="button" onClick={logout} className="button-secondary">Abmelden</button></> : activeChild ? <button type="button" onClick={logout} className="button-secondary">{activeChild.emoji} {activeChild.display_name} abmelden</button> : <Link href="/login" className="button-secondary">Eltern anmelden</Link>}
         </div>
-      </motion.header>
+      </header>
 
-      {/* Fortschrittsbalken */}
-      <div
-        className="mb-6 h-3 w-full overflow-hidden rounded-full"
-        style={{ backgroundColor: "var(--color-muted)" }}
-        role="progressbar"
-        aria-valuenow={Math.round(progress)}
-        aria-valuemin={0}
-        aria-valuemax={100}
-      >
-        <motion.div
-          className="h-full rounded-full"
-          style={{ backgroundColor: "var(--color-secondary)" }}
-          initial={false}
-          animate={{ width: `${progress}%` }}
-          transition={{ duration: 0.4, ease: EASE_OUT }}
-        />
-      </div>
+      <section className="grid gap-5 lg:grid-cols-[0.95fr_1.05fr]">
+        <ProfilePanel activeMember={currentMember} />
+        <Scoreboard stats={rankedStats} />
+      </section>
 
-      <div className="mb-6 grid grid-cols-2 gap-3">
-        <div className="rounded-2xl border p-4" style={{ borderColor: "var(--color-border)" }}>
-          <p className="text-sm font-bold" style={{ opacity: 0.7 }}>Punkte heute</p>
-          <p className="text-3xl font-bold" style={{ color: "var(--color-secondary)" }}>{stats?.points_today ?? 0}</p>
-        </div>
-        <div className="rounded-2xl border p-4" style={{ borderColor: "var(--color-border)" }}>
-          <p className="text-sm font-bold" style={{ opacity: 0.7 }}>Tage am Stück</p>
-          <p className="text-3xl font-bold" style={{ color: "var(--color-accent)" }}>{stats?.current_streak ?? 0}</p>
-        </div>
-      </div>
-
-      {/* Mitglieder-Filter */}
-      <div className="mb-6 flex flex-wrap gap-2">
-        <FilterChip
-          active={filter === null}
-          label="Alle"
-          onClick={() => {
-            setFilter(null);
-            play("click");
-          }}
-        />
-        {members.map((m) => (
-          <FilterChip
-            key={m.id}
-            active={filter === m.id}
-            label={`${m.emoji} ${m.display_name}`}
-            color={m.color}
-            onClick={() => {
-              setFilter(m.id);
-              play("click");
-            }}
-          />
-        ))}
-      </div>
-
-      {/* Aufgabenliste */}
-      {loading ? (
-        <p style={{ opacity: 0.6 }}>Lädt…</p>
-      ) : error ? (
-        <div className="rounded-2xl border border-dashed p-8 text-center" style={{ borderColor: "var(--color-destructive)" }}>
-          <p className="font-bold">Aufgaben konnten nicht geladen werden.</p>
-          <button type="button" onClick={() => window.location.reload()} className="mt-3 cursor-pointer rounded-xl px-4 py-2 font-bold text-white" style={{ backgroundColor: "var(--color-primary)" }}>Erneut versuchen</button>
-        </div>
-      ) : visible.length === 0 ? (
-        <EmptyState />
-      ) : (
-        <motion.ul
-          className="flex flex-col gap-3"
-          initial="hidden"
-          animate="visible"
-          variants={{
-            hidden: {},
-            visible: { transition: { staggerChildren: 0.06 } },
-          }}
-        >
-          <AnimatePresence>
-            {visible.map((instance) => (
-              <TaskCard
-                key={instance.id}
-                instance={instance}
-                onComplete={handleComplete}
-              />
-            ))}
-          </AnimatePresence>
-        </motion.ul>
-      )}
+      <section className="mt-8">
+        <div className="mb-4 flex flex-wrap items-end justify-between gap-3"><div><h2 className="text-3xl font-bold">Aufgaben</h2><p className="text-sm" style={{ opacity: 0.7 }}>Tagesaufgaben erst am jeweiligen Tag; Wochen- und Monatsaufgaben schon vorher.</p></div><div className="space-y-2"><div className="flex flex-wrap gap-2"><FilterChip active={filter === null} label="Alle Personen" onClick={() => setFilter(null)} />{members.map((member) => <FilterChip key={member.id} active={filter === member.id} label={`${member.emoji} ${member.display_name}`} color={member.color} onClick={() => setFilter(member.id)} />)}</div><div className="flex flex-wrap gap-2"><FilterChip active={statusFilter === "ALL"} label="Alle" onClick={() => setStatusFilter("ALL")} /><FilterChip active={statusFilter === "OPEN"} label="Offen" onClick={() => setStatusFilter("OPEN")} /><FilterChip active={statusFilter === "DONE"} label="Erledigt" onClick={() => setStatusFilter("DONE")} /></div></div></div>
+        {error && <p className="mb-4 rounded-xl px-4 py-3 text-sm font-bold" style={{ color: "var(--color-destructive)", backgroundColor: "#fee2e2" }}>{error}</p>}
+        {visible.length === 0 ? <p className="rounded-2xl border border-dashed p-8 text-center" style={{ borderColor: "var(--color-border)" }}>Für diese Auswahl gibt es keine Aufgaben.</p> : <TaskSections instances={visible} currentMemberId={currentMember?.id ?? null} isParent={Boolean(isParent)} onComplete={handleComplete} onShare={(id) => handleComplete(id, true)} onReopen={handleReopen} onUndo={handleUndo} />}
+      </section>
     </main>
   );
 }
 
-function FilterChip({
-  active,
-  label,
-  color,
-  onClick,
-}: {
-  active: boolean;
-  label: string;
-  color?: string;
-  onClick: () => void;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className="cursor-pointer rounded-full border px-4 py-2 text-sm font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2"
-      style={{
-        borderColor: active ? color ?? "var(--color-primary)" : "var(--color-border)",
-        backgroundColor: active ? `${color ?? "#2563eb"}1a` : "transparent",
-        color: active ? color ?? "var(--color-primary)" : "var(--color-foreground)",
-        ...({ "--tw-ring-color": "var(--color-ring)" } as React.CSSProperties),
-      }}
-    >
-      {label}
-    </button>
-  );
+function ProfilePanel({ activeMember }: { activeMember: Member | null }) {
+  if (activeMember) return <section className="rounded-3xl border p-5 sm:p-6" style={{ borderColor: "var(--color-border)", backgroundColor: `${activeMember.color}12` }}><p className="text-sm font-bold uppercase tracking-wide" style={{ color: activeMember.color }}>Profil aktiv</p><h2 className="mt-1 text-3xl font-bold">{activeMember.emoji} {activeMember.display_name}</h2><InspirationalQuote key={activeMember.id} /><p className="mt-3 text-sm" style={{ opacity: 0.75 }}>{activeMember.role === "PARENT" ? "Du kannst Aufgaben verwalten und deine eigenen Aufgaben erledigen." : "Du kannst deine Aufgaben erledigen oder einen halben Anteil übernehmen."}</p></section>;
+  return <section className="rounded-3xl border p-5 sm:p-6" style={{ borderColor: "var(--color-border)" }}><p className="text-sm font-bold uppercase tracking-wide" style={{ color: "var(--color-primary)" }}>PIN-Login</p><h2 className="mt-1 text-3xl font-bold">Wer hilft heute mit?</h2><p className="mt-1 text-sm" style={{ opacity: 0.7 }}>Mit deiner sechsstelligen PIN wird dein Profil automatisch erkannt.</p><Link href="/login" className="touch-action mt-4 inline-flex items-center rounded-xl px-5 py-3 font-bold text-white" style={{ backgroundColor: "var(--color-primary)" }}>Mit PIN anmelden</Link></section>;
 }
 
-function EmptyState() {
-  return (
-    <motion.div
-      initial={{ opacity: 0, scale: 0.95 }}
-      animate={{ opacity: 1, scale: 1 }}
-      transition={{ duration: 0.4, ease: EASE_OUT }}
-      className="rounded-2xl border border-dashed py-16 text-center"
-      style={{ borderColor: "var(--color-border)" }}
-    >
-      <p className="text-4xl" aria-hidden>
-        🎉
-      </p>
-      <p className="mt-2 text-lg font-semibold">Alles erledigt!</p>
-      <p className="text-sm" style={{ opacity: 0.7 }}>
-        Für diese Auswahl gibt es heute nichts mehr zu tun.
-      </p>
-    </motion.div>
-  );
+function InspirationalQuote() {
+  const [inspiration] = useState(randomInspiration);
+  return <p className="mt-2 text-base font-semibold leading-snug" style={{ color: "var(--color-foreground)", opacity: 0.8 }}>„{inspiration.text}“ <span className="whitespace-nowrap">— {inspiration.author}</span></p>;
 }
 
-function SpeakerOn() {
-  return (
-    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M11 5 6 9H2v6h4l5 4z" />
-      <path d="M15.5 8.5a5 5 0 0 1 0 7" />
-      <path d="M18.5 5.5a9 9 0 0 1 0 13" />
-    </svg>
-  );
+function Scoreboard({ stats }: { stats: MemberWeeklyStats[] }) {
+  return <section className="rounded-3xl border p-5 sm:p-6" style={{ borderColor: "var(--color-border)", backgroundColor: "var(--color-muted)" }}><div className="flex items-center gap-2"><Crown /><div><p className="text-sm font-bold uppercase tracking-wide" style={{ color: "var(--color-accent)" }}>Scoreboard</p><h2 className="text-3xl" style={{ fontFamily: "var(--font-scoreboard)" }}>Wer ist Super-Buchi?</h2></div></div><ol className="mt-4 space-y-2">{stats.map((stat, index) => { const leader = index === 0; return <li key={stat.member_id} className="flex items-center gap-3 rounded-2xl px-3 py-2" style={{ backgroundColor: leader ? "#fef3c7" : "var(--color-background)", color: leader ? "#451a03" : "var(--color-foreground)", border: leader ? "1px solid #f59e0b" : "1px solid transparent" }}><span className="w-6 text-center font-bold" style={{ color: leader ? "#92400e" : stat.color }}>{index + 1}</span><span className="text-xl">{stat.emoji}</span><span className="min-w-0 flex-1 truncate font-bold">{stat.display_name}</span><span className="text-sm font-bold" style={{ color: leader ? "#78350f" : "var(--color-foreground)", opacity: leader ? 1 : 0.7 }}>{formatTasks(stat.completed_tasks)}</span><span className="rounded-full px-3 py-1 font-bold" style={{ backgroundColor: leader ? "#b45309" : stat.color, color: "#ffffff" }}>{formatPoints(stat.points)} P</span></li>; })}</ol></section>;
 }
 
-function SpeakerOff() {
-  return (
-    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M11 5 6 9H2v6h4l5 4z" />
-      <line x1="22" y1="9" x2="16" y2="15" />
-      <line x1="16" y1="9" x2="22" y2="15" />
-    </svg>
-  );
+function TaskSections({ instances, currentMemberId, isParent, onComplete, onShare, onReopen, onUndo }: { instances: Instance[]; currentMemberId: number | null; isParent: boolean; onComplete: (id: number) => void; onShare: (id: number) => void; onReopen: (id: number) => void; onUndo: (id: number) => void }) {
+  const sections = [
+    { key: "DAILY", title: "Tagesaufgaben", subtitle: "Heute und frühere Tage", color: "var(--color-primary)" },
+    { key: "WEEKLY", title: "Wochenaufgaben", subtitle: "Diese Woche erledigbar", color: "var(--color-secondary)" },
+    { key: "MONTHLY", title: "Monatsaufgaben", subtitle: "Diesen Monat erledigbar", color: "var(--color-accent)" },
+    { key: "MANUAL", title: "Zusätzliche Aufgaben", subtitle: "Einmalige Aufgaben und Zeiträume", color: "#7c3aed" },
+  ] as const;
+  return <div className="space-y-6">{sections.map((section) => { const grouped = groupByDay(instances.filter((instance) => instance.category === section.key)); if (!grouped.length) return null; return <section key={section.key}><div className="mb-2"><h3 className="text-2xl font-bold" style={{ color: section.color }}>{section.title}</h3><p className="text-sm" style={{ opacity: 0.7 }}>{section.subtitle}</p></div><div className="space-y-3">{grouped.map((group) => <details key={group.date} open={group.isToday} className="rounded-2xl border" style={{ borderColor: group.isToday ? section.color : "var(--color-border)", backgroundColor: "var(--color-background)" }}><summary className="touch-action flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-3 font-bold transition-colors hover:bg-[var(--color-muted)] focus-visible:outline-none focus-visible:ring-2"><span>{group.isToday ? "Heute · " : ""}{formatDay(group.date)}</span><span className="rounded-full px-2 py-1 text-xs" style={{ backgroundColor: "var(--color-muted)" }}>{group.instances.length}</span></summary><motion.ul className="grid gap-3 px-3 pb-3 pt-1 lg:grid-cols-2" initial="hidden" animate="visible" variants={{ hidden: {}, visible: { transition: { staggerChildren: 0.04 } } }}><AnimatePresence>{group.instances.map((instance) => <TaskCard key={instance.id} instance={instance} onComplete={onComplete} onShare={onShare} onReopen={isParent ? onReopen : undefined} onUndo={onUndo} canUndo={Boolean(currentMemberId && instance.contributions.some((contribution) => contribution.member_id === currentMemberId))} showCompletionDetails />)}</AnimatePresence></motion.ul></details>)}</div></section>; })}</div>;
 }
 
-function LogOut() {
-  return (
-    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-      <path d="M10 17l5-5-5-5" />
-      <path d="M15 12H3" />
-      <path d="M21 19V5a2 2 0 0 0-2-2h-7" />
-    </svg>
-  );
-}
+function FilterChip({ active, label, color, onClick }: { active: boolean; label: string; color?: string; onClick: () => void }) { return <button type="button" onClick={onClick} className="cursor-pointer rounded-full border px-3 py-1.5 text-sm font-bold" style={{ borderColor: active ? color ?? "var(--color-primary)" : "var(--color-border)", backgroundColor: active ? `${color ?? "#2563eb"}1a` : "transparent" }}>{label}</button>; }
+function Crown() { return <svg aria-hidden="true" width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="var(--color-accent)" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="m3 7 4 4 5-7 5 7 4-4-2 12H5z" /><path d="M5 21h14" /></svg>; }
+function currentWeekBounds() { const today = new Date(); const start = new Date(today.getFullYear(), today.getMonth(), today.getDate() - today.getDay()); const end = new Date(start); end.setDate(start.getDate() + 6); return { start, end }; }
+function formatDate(date: Date) { return new Intl.DateTimeFormat("de-DE", { day: "2-digit", month: "2-digit" }).format(date); }
+function formatLongDate(date: Date) { return new Intl.DateTimeFormat("de-DE", { weekday: "long", day: "2-digit", month: "long", year: "numeric" }).format(date); }
+function formatTasks(value: number) { return `${value % 1 ? value.toFixed(1).replace(".", ",") : value} Aufgaben`; }
+function formatPoints(value: number) { return value % 1 ? value.toFixed(1).replace(".", ",") : value; }
+function groupByDay(instances: Instance[]) { const today = toIsoDate(new Date()); const grouped = new Map<string, Instance[]>(); instances.forEach((instance) => { const list = grouped.get(instance.due_date) ?? []; list.push(instance); grouped.set(instance.due_date, list); }); return [...grouped.entries()].sort(([left], [right]) => { if (left === today) return -1; if (right === today) return 1; return left.localeCompare(right); }).map(([date, entries]) => ({ date, instances: entries, isToday: date === today })); }
+function toIsoDate(date: Date) { return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`; }
+function formatDay(date: string) { return new Intl.DateTimeFormat("de-DE", { weekday: "long", day: "2-digit", month: "long" }).format(new Date(`${date}T12:00:00`)); }

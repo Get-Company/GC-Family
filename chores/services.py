@@ -68,6 +68,11 @@ def materialize_chore(
                 defaults={"assigned_member": chore.default_assignee},
             )
             if was_created:
+                assignees = list(chore.default_assignees.all())
+                if assignees:
+                    instance.assigned_members.set(assignees)
+                    instance.assigned_member = assignees[0]
+                    instance.save(update_fields=["assigned_member"])
                 created.append(instance)
         day += dt.timedelta(days=1)
     return created

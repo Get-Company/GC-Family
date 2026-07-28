@@ -1,6 +1,5 @@
 "use client";
 
-import { useRouter } from "next/navigation";
 import {
   createContext,
   useCallback,
@@ -13,18 +12,17 @@ import {
 
 import {
   getCurrentMember,
-  getDeviceMembers,
-  loginChildWithPin,
-  loginParent,
+  loginWithPin,
   refreshAccessToken,
   setAccessToken,
   setUnauthorizedHandler,
   type Me,
-  type Member,
 } from "@/lib/api";
 
 const ACCESS_TOKEN_KEY = "gc-family-access-token";
-const DEVICE_TOKEN_KEY = "gc-family-device-token";
+// Einmalige Migration des alten Familiengerät-Modus: Dort konnte der aktive
+// Token zu einem Kinderprofil gehören, während dieser Schlüssel den Eltern-Token hielt.
+const LEGACY_DEVICE_TOKEN_KEY = "gc-family-device-token";
 const REFRESH_TOKEN_KEY = "gc-family-refresh-token";
 
 type AuthState =
@@ -33,14 +31,11 @@ type AuthState =
   | {
       kind: "authenticated";
       me: Me;
-      deviceMembers: Member[];
     };
 
 type AuthContextValue = {
   state: AuthState;
-  loginParent: (email: string, password: string) => Promise<void>;
-  unlockChild: (memberId: number, pin: string) => Promise<void>;
-  switchToParent: () => Promise<void>;
+  loginWithPin: (pin: string) => Promise<void>;
   logout: () => void;
 };
 
@@ -59,7 +54,6 @@ function store(key: string, value: string | null) {
 }
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const router = useRouter();
   const [state, setState] = useState<AuthState>({ kind: "loading" });
 
   const setActiveToken = useCallback((token: string | null) => {
@@ -67,35 +61,35 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     store(ACCESS_TOKEN_KEY, token);
   }, []);
 
-  const loadAuthenticatedState = useCallback(async (token: string, deviceToken: string) => {
-    const [me, deviceMembers] = await Promise.all([
-      getCurrentMember(token),
-      getDeviceMembers(deviceToken),
-    ]);
-    setState({ kind: "authenticated", me, deviceMembers });
+  const loadAuthenticatedState = useCallback(async (token: string) => {
+    const me = await getCurrentMember(token);
+    setState({ kind: "authenticated", me });
   }, []);
 
   const logout = useCallback(() => {
     setActiveToken(null);
-    store(DEVICE_TOKEN_KEY, null);
+    store(LEGACY_DEVICE_TOKEN_KEY, null);
     store(REFRESH_TOKEN_KEY, null);
-    setState({ kind: "anonymous" });
-    router.replace("/login");
-  }, [router, setActiveToken]);
+    // Ein kompletter Seitenwechsel verhindert, dass eine alte Route mit
+    // zwischengespeichertem Auth-State direkt wieder zum Dashboard umleitet.
+    window.location.assign("/login");
+  }, [setActiveToken]);
 
   useEffect(() => {
     const restore = async () => {
       const storedAccess = getStored(ACCESS_TOKEN_KEY);
-      let deviceToken = getStored(DEVICE_TOKEN_KEY);
+      const legacyParentToken = getStored(LEGACY_DEVICE_TOKEN_KEY);
+      const activeParentToken = legacyParentToken ?? storedAccess;
       const refreshToken = getStored(REFRESH_TOKEN_KEY);
-      if (!storedAccess || !deviceToken) {
+      if (!activeParentToken) {
         setState({ kind: "anonymous" });
         return;
       }
 
-      setAccessToken(storedAccess);
+      setActiveToken(activeParentToken);
+      store(LEGACY_DEVICE_TOKEN_KEY, null);
       try {
-        await loadAuthenticatedState(storedAccess, deviceToken);
+        await loadAuthenticatedState(activeParentToken);
       } catch {
         if (!refreshToken) {
           logout();
@@ -103,10 +97,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         }
         try {
           const refreshed = await refreshAccessToken(refreshToken);
-          deviceToken = refreshed.access;
-          store(DEVICE_TOKEN_KEY, deviceToken);
-          setActiveToken(deviceToken);
-          await loadAuthenticatedState(deviceToken, deviceToken);
+          setActiveToken(refreshed.access);
+          await loadAuthenticatedState(refreshed.access);
         } catch {
           logout();
         }
@@ -123,29 +115,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const value = useMemo<AuthContextValue>(
     () => ({
       state,
-      async loginParent(email, password) {
-        const tokens = await loginParent(email, password);
-        store(DEVICE_TOKEN_KEY, tokens.access);
-        store(REFRESH_TOKEN_KEY, tokens.refresh);
-        setActiveToken(tokens.access);
-        await loadAuthenticatedState(tokens.access, tokens.access);
-      },
-      async unlockChild(memberId, pin) {
-        const deviceToken = getStored(DEVICE_TOKEN_KEY);
-        if (!deviceToken) {
-          throw new Error("Bitte melde zuerst ein Elternkonto an.");
-        }
-        const childToken = await loginChildWithPin(memberId, pin, deviceToken);
-        setActiveToken(childToken.access);
-        await loadAuthenticatedState(childToken.access, deviceToken);
-      },
-      async switchToParent() {
-        const deviceToken = getStored(DEVICE_TOKEN_KEY);
-        if (!deviceToken) {
-          throw new Error("Bitte melde zuerst ein Elternkonto an.");
-        }
-        setActiveToken(deviceToken);
-        await loadAuthenticatedState(deviceToken, deviceToken);
+      async loginWithPin(pin) {
+        const token = await loginWithPin(pin);
+        store(REFRESH_TOKEN_KEY, null);
+        setActiveToken(token.access);
+        await loadAuthenticatedState(token.access);
       },
       logout,
     }),

@@ -124,6 +124,143 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/auth/child-login": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Child Login
+         * @description Meldet ein Kind direkt am sichtbaren Familien-Dashboard per PIN an.
+         */
+        post: operations["accounts_api_child_login"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/auth/pin-login": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Family Pin Login
+         * @description Einfacher sechsstelliger Login für Kinder und Eltern ohne Profilauswahl.
+         */
+        post: operations["accounts_api_family_pin_login"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/auth/household/manage-members": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Managed Members
+         * @description Listet Mitglieder inklusive Eltern-E-Mail für die Elternverwaltung.
+         */
+        get: operations["accounts_api_managed_members"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/auth/household/manage-members/parents": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Create Parent Member
+         * @description Legt einen weiteren Eltern-Login samt Profil im aktuellen Haushalt an.
+         */
+        post: operations["accounts_api_create_parent_member"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/auth/household/manage-members/children": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Create Child Member
+         * @description Legt ein Kinderprofil mit einer sechsstelligen PIN an.
+         */
+        post: operations["accounts_api_create_child_member"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/auth/household/manage-members/children/{member_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Update Child Member
+         * @description Aktualisiert ein Kinderprofil und bei Bedarf dessen PIN.
+         */
+        put: operations["accounts_api_update_child_member"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/auth/household/manage-members/parents/{member_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Update Parent Member */
+        put: operations["accounts_api_update_parent_member"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/chores/members": {
         parameters: {
             query?: never;
@@ -198,6 +335,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/chores/instances/{instance_id}/uncomplete": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Uncomplete Instance
+         * @description Nimmt den eigenen vollständigen oder halben Aufgabenanteil zurück.
+         */
+        post: operations["chores_api_uncomplete_instance"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/chores/instances/{instance_id}/skip": {
         parameters: {
             query?: never;
@@ -209,6 +366,26 @@ export interface paths {
         put?: never;
         /** Skip Instance */
         post: operations["chores_api_skip_instance"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/chores/instances/{instance_id}/reopen": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Reopen Instance
+         * @description Nimmt eine Erledigung zurück. Das dürfen ausschließlich Eltern.
+         */
+        post: operations["chores_api_reopen_instance"];
         delete?: never;
         options?: never;
         head?: never;
@@ -263,6 +440,46 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/chores/{chore_id}/image": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Upload Chore Image
+         * @description Hinterlegt ein optionales Bild an einer Aufgabe.
+         */
+        post: operations["chores_api_upload_chore_image"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/public/dashboard": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Public Dashboard
+         * @description Öffentliche Familienansicht für die laufende Sonntag-bis-Samstag-Woche.
+         */
+        get: operations["chores_api_public_dashboard"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -298,6 +515,27 @@ export interface components {
             /** Refresh */
             refresh: string;
         };
+        /**
+         * AuthMemberOut
+         * @description Eindeutiger Schema-Name, damit sich die OpenAPI-Schemata nicht mit
+         *     der öffentlichen Aufgaben-Mitgliederliste überschneiden.
+         */
+        AuthMemberOut: {
+            /** Id */
+            id: number;
+            /** Display Name */
+            display_name: string;
+            /** Role */
+            role: string;
+            /** Color */
+            color: string;
+            /** Emoji */
+            emoji: string;
+            /** Completion Jingle */
+            completion_jingle: string;
+            /** Undo Jingle */
+            undo_jingle: string;
+        };
         /** HouseholdOut */
         HouseholdOut: {
             /** Id */
@@ -311,7 +549,16 @@ export interface components {
             authenticated: boolean;
             user?: components["schemas"]["UserOut"] | null;
             household: components["schemas"]["HouseholdOut"];
-            member: components["schemas"]["MemberOut"];
+            member: components["schemas"]["AuthMemberOut"];
+        };
+        /** UserOut */
+        UserOut: {
+            /** Id */
+            id: number;
+            /** Email */
+            email: string;
+            /** Can Access Backend */
+            can_access_backend: boolean;
         };
         /** MemberOut */
         MemberOut: {
@@ -326,13 +573,6 @@ export interface components {
             /** Emoji */
             emoji: string;
         };
-        /** UserOut */
-        UserOut: {
-            /** Id */
-            id: number;
-            /** Email */
-            email: string;
-        };
         /** PinIn */
         PinIn: {
             /** Member Id */
@@ -340,16 +580,144 @@ export interface components {
             /** Pin */
             pin: string;
         };
+        /** FamilyPinIn */
+        FamilyPinIn: {
+            /** Pin */
+            pin: string;
+        };
+        /** ManagedMemberOut */
+        ManagedMemberOut: {
+            /** Id */
+            id: number;
+            /** Display Name */
+            display_name: string;
+            /** Role */
+            role: string;
+            /** Color */
+            color: string;
+            /** Emoji */
+            emoji: string;
+            /** Completion Jingle */
+            completion_jingle: string;
+            /** Undo Jingle */
+            undo_jingle: string;
+            /** Email */
+            email: string | null;
+        };
+        /** ParentMemberIn */
+        ParentMemberIn: {
+            /** Display Name */
+            display_name: string;
+            /** Email */
+            email: string;
+            /** Pin */
+            pin: string;
+            /**
+             * Color
+             * @default #2563eb
+             */
+            color: string;
+            /**
+             * Emoji
+             * @default
+             */
+            emoji: string;
+        };
+        /** ChildMemberIn */
+        ChildMemberIn: {
+            /** Display Name */
+            display_name: string;
+            /** Pin */
+            pin: string;
+            /**
+             * Color
+             * @default #6366f1
+             */
+            color: string;
+            /**
+             * Emoji
+             * @default
+             */
+            emoji: string;
+            /**
+             * Completion Jingle
+             * @default SPARKLE
+             */
+            completion_jingle: string;
+            /**
+             * Undo Jingle
+             * @default SOFT
+             */
+            undo_jingle: string;
+        };
+        /** ChildMemberUpdateIn */
+        ChildMemberUpdateIn: {
+            /** Display Name */
+            display_name: string;
+            /** Pin */
+            pin?: string | null;
+            /**
+             * Color
+             * @default #6366f1
+             */
+            color: string;
+            /**
+             * Emoji
+             * @default
+             */
+            emoji: string;
+            /** Completion Jingle */
+            completion_jingle?: string | null;
+            /** Undo Jingle */
+            undo_jingle?: string | null;
+        };
+        /** ParentMemberUpdateIn */
+        ParentMemberUpdateIn: {
+            /** Display Name */
+            display_name: string;
+            /** Pin */
+            pin?: string | null;
+            /**
+             * Color
+             * @default #2563eb
+             */
+            color: string;
+            /**
+             * Emoji
+             * @default
+             */
+            emoji: string;
+        };
+        /** ContributionOut */
+        ContributionOut: {
+            /** Member Id */
+            member_id: number;
+            /** Member Name */
+            member_name: string;
+            /** Member Emoji */
+            member_emoji: string;
+            /** Share */
+            share: number;
+            /**
+             * Completed At
+             * Format: date-time
+             */
+            completed_at: string;
+        };
         /** InstanceOut */
         InstanceOut: {
             /** Id */
             id: number;
             /** Title */
             title: string;
+            /** Description */
+            description: string;
             /** Icon */
             icon: string;
             /** Color */
             color: string;
+            /** Image Url */
+            image_url: string | null;
             /** Points */
             points: number;
             /**
@@ -357,12 +725,28 @@ export interface components {
              * Format: date
              */
             due_date: string;
+            /** Active Until */
+            active_until: string | null;
+            /** Category */
+            category: string;
             /** Status */
             status: string;
             /** Assigned Member Id */
             assigned_member_id: number | null;
             /** Assigned Member Name */
             assigned_member_name: string | null;
+            /** Assigned Member Ids */
+            assigned_member_ids: number[];
+            /** Assigned Member Names */
+            assigned_member_names: string[];
+            /** Completed At */
+            completed_at: string | null;
+            /** Completed By Id */
+            completed_by_id: number | null;
+            /** Completed By Name */
+            completed_by_name: string | null;
+            /** Contributions */
+            contributions: components["schemas"]["ContributionOut"][];
         };
         /** StatsOut */
         StatsOut: {
@@ -375,6 +759,11 @@ export interface components {
         CompleteIn: {
             /** Member Id */
             member_id?: number | null;
+            /**
+             * Share
+             * @default false
+             */
+            share: boolean;
         };
         /** ChoreOut */
         ChoreOut: {
@@ -388,14 +777,20 @@ export interface components {
             icon: string;
             /** Color */
             color: string;
+            /** Image Url */
+            image_url: string | null;
             /** Points */
             points: number;
             /** Is Recurring */
             is_recurring: boolean;
             /** Default Assignee Id */
             default_assignee_id: number | null;
+            /** Default Assignee Ids */
+            default_assignee_ids: number[];
             /** Due Date */
             due_date: string | null;
+            /** End Date */
+            end_date: string | null;
             recurrence: components["schemas"]["RecurrenceOut"] | null;
         };
         /** RecurrenceOut */
@@ -453,8 +848,15 @@ export interface components {
             is_recurring: boolean;
             /** Default Assignee Id */
             default_assignee_id?: number | null;
+            /**
+             * Default Assignee Ids
+             * @default []
+             */
+            default_assignee_ids: number[];
             /** Due Date */
             due_date?: string | null;
+            /** End Date */
+            end_date?: string | null;
             recurrence?: components["schemas"]["RecurrenceIn"] | null;
         };
         /** RecurrenceIn */
@@ -480,6 +882,30 @@ export interface components {
             start_date: string;
             /** End Date */
             end_date?: string | null;
+        };
+        /** MemberWeeklyStatsOut */
+        MemberWeeklyStatsOut: {
+            /** Member Id */
+            member_id: number;
+            /** Display Name */
+            display_name: string;
+            /** Emoji */
+            emoji: string;
+            /** Color */
+            color: string;
+            /** Completed Tasks */
+            completed_tasks: number;
+            /** Points */
+            points: number;
+        };
+        /** PublicDashboardOut */
+        PublicDashboardOut: {
+            /** Members */
+            members: components["schemas"]["MemberOut"][];
+            /** Instances */
+            instances: components["schemas"]["InstanceOut"][];
+            /** Stats */
+            stats: components["schemas"]["MemberWeeklyStatsOut"][];
         };
     };
     responses: never;
@@ -622,6 +1048,174 @@ export interface operations {
             };
         };
     };
+    accounts_api_child_login: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PinIn"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AccessTokenOut"];
+                };
+            };
+        };
+    };
+    accounts_api_family_pin_login: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["FamilyPinIn"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AccessTokenOut"];
+                };
+            };
+        };
+    };
+    accounts_api_managed_members: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ManagedMemberOut"][];
+                };
+            };
+        };
+    };
+    accounts_api_create_parent_member: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ParentMemberIn"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ManagedMemberOut"];
+                };
+            };
+        };
+    };
+    accounts_api_create_child_member: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ChildMemberIn"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ManagedMemberOut"];
+                };
+            };
+        };
+    };
+    accounts_api_update_child_member: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                member_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ChildMemberUpdateIn"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ManagedMemberOut"];
+                };
+            };
+        };
+    };
+    accounts_api_update_parent_member: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                member_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ParentMemberUpdateIn"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ManagedMemberOut"];
+                };
+            };
+        };
+    };
     chores_api_list_members: {
         parameters: {
             query?: never;
@@ -712,7 +1306,51 @@ export interface operations {
             };
         };
     };
+    chores_api_uncomplete_instance: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                instance_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InstanceOut"];
+                };
+            };
+        };
+    };
     chores_api_skip_instance: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                instance_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InstanceOut"];
+                };
+            };
+        };
+    };
+    chores_api_reopen_instance: {
         parameters: {
             query?: never;
             header?: never;
@@ -821,6 +1459,58 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+        };
+    };
+    chores_api_upload_chore_image: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                chore_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": {
+                    /**
+                     * Image
+                     * Format: binary
+                     */
+                    image: string;
+                };
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ChoreOut"];
+                };
+            };
+        };
+    };
+    chores_api_public_dashboard: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PublicDashboardOut"];
+                };
             };
         };
     };

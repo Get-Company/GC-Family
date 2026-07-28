@@ -40,13 +40,25 @@ class Household(models.Model):
 class FamilyMember(models.Model):
     """Profil einer Person innerhalb eines Haushalts.
 
-    - Eltern: `user` gesetzt (echtes Login), Rolle PARENT.
-    - Kinder: `user` leer, `pin_hash` gesetzt (Profilauswahl + PIN), Rolle CHILD.
+    - Eltern: `user` gesetzt (Django-Backend), Rolle PARENT.
+    - Alle Profile: `pin_hash` für den einheitlichen sechsstelligen Familien-Login.
     """
 
     class Role(models.TextChoices):
         PARENT = "PARENT", "Elternteil"
         CHILD = "CHILD", "Kind"
+
+    class Jingle(models.TextChoices):
+        SPARKLE = "SPARKLE", "Glitzer"
+        BELL = "BELL", "Glocke"
+        FANFARE = "FANFARE", "Fanfare"
+        BUBBLE = "BUBBLE", "Blubber"
+        CELEBRATE = "CELEBRATE", "Jubel"
+        SOFT = "SOFT", "Sanft"
+        DOWNBEAT = "DOWNBEAT", "Abwärts"
+        RAIN = "RAIN", "Regen"
+        PLOP = "PLOP", "Plopp"
+        RESET = "RESET", "Neustart"
 
     household = models.ForeignKey(
         Household,
@@ -69,6 +81,16 @@ class FamilyMember(models.Model):
     )
     emoji = models.CharField(max_length=8, blank=True, help_text="Avatar-Emoji")
     pin_hash = models.CharField(max_length=128, blank=True)
+    completion_jingle = models.CharField(
+        max_length=16,
+        choices=Jingle.choices,
+        default=Jingle.SPARKLE,
+    )
+    undo_jingle = models.CharField(
+        max_length=16,
+        choices=Jingle.choices,
+        default=Jingle.SOFT,
+    )
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:

@@ -11,7 +11,9 @@ COPY . .
 # Ziel des /api-Rewrites wird zur Build-Zeit ins routes-manifest eingebacken.
 # Im Compose-Betrieb ist das Backend unter http://backend:8000 erreichbar.
 ARG BACKEND_URL=http://127.0.0.1:8000
+ARG APP_VERSION=dev
 ENV BACKEND_URL=${BACKEND_URL}
+ENV NEXT_PUBLIC_APP_VERSION=${APP_VERSION}
 ENV NEXT_TELEMETRY_DISABLED=1
 RUN npm run build
 

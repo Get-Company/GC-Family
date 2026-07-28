@@ -21,6 +21,11 @@ class Chore(models.Model):
     description = models.TextField(blank=True)
     icon = models.CharField(max_length=8, blank=True, help_text="Emoji-Icon")
     color = models.CharField(max_length=7, default="#6366f1")
+    image = models.FileField(
+        upload_to="chore-images/",
+        blank=True,
+        help_text="Optionales Bild zur Aufgabe.",
+    )
     points = models.PositiveIntegerField(default=0)
     is_recurring = models.BooleanField(default=False)
     default_assignee = models.ForeignKey(
@@ -29,6 +34,12 @@ class Chore(models.Model):
         related_name="default_chores",
         null=True,
         blank=True,
+    )
+    default_assignees = models.ManyToManyField(
+        FamilyMember,
+        related_name="default_chores_multi",
+        blank=True,
+        help_text="Kinder, die gemeinsam für diese Aufgabe zuständig sind.",
     )
     created_by = models.ForeignKey(
         User,
@@ -86,6 +97,7 @@ class ChoreInstance(models.Model):
 
     class Status(models.TextChoices):
         OPEN = "OPEN", "Offen"
+        PARTIAL = "PARTIAL", "Wird gemeinsam erledigt"
         DONE = "DONE", "Erledigt"
         SKIPPED = "SKIPPED", "Übersprungen"
 
@@ -95,12 +107,23 @@ class ChoreInstance(models.Model):
         related_name="instances",
     )
     due_date = models.DateField()
+    active_until = models.DateField(
+        null=True,
+        blank=True,
+        help_text="Optionales Ende eines Zeitraums für einmalige Aufgaben.",
+    )
     assigned_member = models.ForeignKey(
         FamilyMember,
         on_delete=models.SET_NULL,
         related_name="assigned_instances",
         null=True,
         blank=True,
+    )
+    assigned_members = models.ManyToManyField(
+        FamilyMember,
+        related_name="assigned_instances_multi",
+        blank=True,
+        help_text="Kinder, denen diese konkrete Aufgabe zugeordnet ist.",
     )
     status = models.CharField(
         max_length=10,
@@ -127,3 +150,37 @@ class ChoreInstance(models.Model):
 
     def __str__(self):
         return f"{self.chore.title} @ {self.due_date} [{self.get_status_display()}]"
+
+
+class ChoreContribution(models.Model):
+    """Der Anteil eines Kindes an einer Aufgaben-Instanz.
+
+    Eine Aufgabe wird entweder allein (Anteil 1,0) oder von genau zwei Kindern
+    geteilt (je Anteil 0,5) erledigt. Der Team-Bonus wird bei der Auswertung
+    berechnet und nicht als veränderlicher Punktestand gespeichert.
+    """
+
+    instance = models.ForeignKey(
+        ChoreInstance,
+        on_delete=models.CASCADE,
+        related_name="contributions",
+    )
+    member = models.ForeignKey(
+        FamilyMember,
+        on_delete=models.CASCADE,
+        related_name="chore_contributions",
+    )
+    share = models.DecimalField(max_digits=3, decimal_places=2)
+    completed_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=["instance", "member"],
+                name="unique_chore_contribution_per_member",
+            )
+        ]
+        ordering = ["completed_at"]
+
+    def __str__(self):
+        return f"{self.member.display_name}: {self.share} von {self.instance}"
