@@ -2,6 +2,7 @@
 
 import { AnimatePresence, motion } from "framer-motion";
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { TaskCard } from "@/components/TaskCard";
@@ -21,6 +22,7 @@ import { randomInspiration } from "@/lib/inspirations";
 
 export default function Dashboard() {
   const { state: authState, logout } = useAuth();
+  const pathname = usePathname();
   const [members, setMembers] = useState<Member[]>([]);
   const [instances, setInstances] = useState<Instance[]>([]);
   const [stats, setStats] = useState<MemberWeeklyStats[]>([]);
@@ -73,12 +75,16 @@ export default function Dashboard() {
     try {
       const instance = await completeInstance(id, currentMember.id, share);
       setInstances((current) => current.map((item) => item.id === id ? instance : item));
-      await loadDashboard();
       playJingle(currentMember.completion_jingle);
+      void loadDashboard().catch(() => {
+        // Der Abschluss war bereits erfolgreich; nur die Hintergrund-Aktualisierung
+        // ist fehlgeschlagen und darf nicht als Berechtigungsfehler erscheinen.
+      });
     } catch {
       const task = instances.find((item) => item.id === id);
       const owners = task?.assigned_member_names?.join(" und ") || task?.assigned_member_name || "einem anderen Familienmitglied";
-      setError(share ? `${currentMember.display_name}, dein halber Anteil konnte gerade nicht übernommen werden. Prüfe bitte, ob die Aufgabe noch offen ist.` : `${currentMember.display_name}, diese Aufgabe gehört ${owners}. Schön, dass du helfen möchtest – übernimm sie bitte gemeinsam oder frage kurz nach.`);
+      const isFree = task?.assigned_member_ids.length === 0 && task?.assigned_member_id === null;
+      setError(share ? `${currentMember.display_name}, dein halber Anteil konnte gerade nicht übernommen werden. Prüfe bitte, ob die Aufgabe noch offen ist.` : isFree ? `${currentMember.display_name}, diese freie Aufgabe konnte gerade nicht übernommen werden. Bitte lade die Seite neu und versuche es noch einmal.` : `${currentMember.display_name}, diese Aufgabe gehört ${owners}. Schön, dass du helfen möchtest – übernimm sie bitte gemeinsam oder frage kurz nach.`);
       play("error");
     }
   }
@@ -126,31 +132,41 @@ export default function Dashboard() {
   }
 
   const { start, end } = currentWeekBounds();
+  const view = pathname === "/tasks" ? "tasks" : pathname === "/scoreboard" ? "scoreboard" : pathname === "/profile" ? "profile" : "dashboard";
+  const pageTitle = view === "tasks" ? "Aufgaben" : view === "scoreboard" ? "Scoreboard" : view === "profile" ? "Mein Profil" : "Willkommen bei GC-Family";
 
   return (
     <main className="mx-auto w-full max-w-6xl flex-1 px-4 py-6 sm:px-6 sm:py-8">
       <header className="mb-7 flex flex-wrap items-start justify-between gap-4">
         <div>
           <p className="text-sm font-bold uppercase tracking-wide" style={{ color: "var(--color-secondary)" }}>GC-Family</p>
-          <h1 className="text-4xl font-bold sm:text-5xl">Unsere Woche</h1>
-          <p className="mt-1 text-lg font-bold" style={{ color: "var(--color-primary)" }}>Heute: {formatLongDate(new Date())}</p>
+          <h1 className="text-4xl font-bold sm:text-5xl">{pageTitle}</h1>
+          <p className="mt-1 text-lg font-bold" style={{ color: "var(--color-primary)" }}>{view === "dashboard" ? `Heute: ${formatLongDate(new Date())}` : "Unsere gemeinsame Woche"}</p>
           <p className="mt-1 text-sm" style={{ opacity: 0.7 }}>{formatDate(start)} – {formatDate(end)} · neue Woche ab Sonntag, 00:00 Uhr</p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          {isParent ? <><Link href="/history" className="button-secondary">Verlauf</Link><Link href="/manage" className="button-secondary">Verwalten</Link>{canAccessBackend && <Link href="/admin/" className="button-secondary">Backend</Link>}<button type="button" onClick={logout} className="button-secondary">Abmelden</button></> : activeChild ? <button type="button" onClick={logout} className="button-secondary">{activeChild.emoji} {activeChild.display_name} abmelden</button> : <Link href="/login" className="button-secondary">Eltern anmelden</Link>}
+          <Link href="/" className="button-secondary">Dashboard</Link>
+          <Link href="/tasks" className="button-secondary">Aufgaben</Link>
+          <Link href="/scoreboard" className="button-secondary">Scoreboard</Link>
+          {currentMember && <Link href="/profile" className="button-secondary">Profil</Link>}
+          {isParent ? <><Link href="/history" className="button-secondary">Verlauf</Link><Link href="/manage" className="button-secondary">Verwalten</Link>{canAccessBackend && <Link href="/admin/" className="button-secondary">Backend</Link>}<button type="button" onClick={logout} className="button-secondary">Abmelden</button></> : activeChild ? <button type="button" onClick={logout} className="button-secondary">{activeChild.emoji} abmelden</button> : <Link href="/login" className="button-secondary">Mit PIN anmelden</Link>}
         </div>
       </header>
 
-      <section className="grid gap-5 lg:grid-cols-[0.95fr_1.05fr]">
-        <ProfilePanel activeMember={currentMember} childPin={newChildPin} childPinPending={childPinPending} childPinStatus={childPinStatus} onChildPinChange={setNewChildPin} onChangeOwnChildPin={() => void changeOwnChildPin()} />
+      {view === "dashboard" && <section className="grid gap-5 lg:grid-cols-[1.15fr_0.85fr]">
+        <QuickTaskOverview instances={visible} />
         <Scoreboard stats={rankedStats} />
-      </section>
+      </section>}
 
-      <section className="mt-8">
+      {view === "profile" && <section className="mx-auto max-w-2xl"><ProfilePanel activeMember={currentMember} childPin={newChildPin} childPinPending={childPinPending} childPinStatus={childPinStatus} onChildPinChange={setNewChildPin} onChangeOwnChildPin={() => void changeOwnChildPin()} /></section>}
+
+      {view === "scoreboard" && <section className="mx-auto max-w-3xl"><Scoreboard stats={rankedStats} /></section>}
+
+      {view === "tasks" && <section>
         <div className="mb-4 flex flex-wrap items-end justify-between gap-3"><div><h2 className="text-3xl font-bold">Aufgaben</h2><p className="text-sm" style={{ opacity: 0.7 }}>Tagesaufgaben erst am jeweiligen Tag; Wochen- und Monatsaufgaben schon vorher.</p></div><div className="space-y-2"><div className="flex flex-wrap gap-2"><FilterChip active={filter === null} label="Alle Personen" onClick={() => setFilter(null)} />{members.map((member) => <FilterChip key={member.id} active={filter === member.id} label={`${member.emoji} ${member.display_name}`} color={member.color} onClick={() => setFilter(member.id)} />)}</div><div className="flex flex-wrap gap-2"><FilterChip active={statusFilter === "ALL"} label="Alle" onClick={() => setStatusFilter("ALL")} /><FilterChip active={statusFilter === "OPEN"} label="Offen" onClick={() => setStatusFilter("OPEN")} /><FilterChip active={statusFilter === "DONE"} label="Erledigt" onClick={() => setStatusFilter("DONE")} /></div></div></div>
         {error && <p className="mb-4 rounded-xl px-4 py-3 text-sm font-bold" style={{ color: "var(--color-destructive)", backgroundColor: "#fee2e2" }}>{error}</p>}
         {visible.length === 0 ? <p className="rounded-2xl border border-dashed p-8 text-center" style={{ borderColor: "var(--color-border)" }}>Für diese Auswahl gibt es keine Aufgaben.</p> : <TaskSections instances={visible} currentMemberId={currentMember?.id ?? null} isParent={Boolean(isParent)} onComplete={handleComplete} onShare={(id) => handleComplete(id, true)} onReopen={handleReopen} onUndo={handleUndo} />}
-      </section>
+      </section>}
     </main>
   );
 }
@@ -167,6 +183,11 @@ function InspirationalQuote() {
 
 function Scoreboard({ stats }: { stats: MemberWeeklyStats[] }) {
   return <section className="rounded-3xl border p-5 sm:p-6" style={{ borderColor: "var(--color-border)", backgroundColor: "var(--color-muted)" }}><div className="flex items-center gap-2"><Crown /><div><p className="text-sm font-bold uppercase tracking-wide" style={{ color: "var(--color-accent)" }}>Scoreboard</p><h2 className="text-3xl" style={{ fontFamily: "var(--font-scoreboard)" }}>Wer ist Super-Buchi?</h2></div></div><ol className="mt-4 space-y-2">{stats.map((stat, index) => { const leader = index === 0; return <li key={stat.member_id} className="flex items-center gap-3 rounded-2xl px-3 py-2" style={{ backgroundColor: leader ? "#fef3c7" : "var(--color-background)", color: leader ? "#451a03" : "var(--color-foreground)", border: leader ? "1px solid #f59e0b" : "1px solid transparent" }}><span className="w-6 text-center font-bold" style={{ color: leader ? "#92400e" : stat.color }}>{index + 1}</span><span className="text-xl">{stat.emoji}</span><span className="min-w-0 flex-1 truncate font-bold">{stat.display_name}</span><span className="text-sm font-bold" style={{ color: leader ? "#78350f" : "var(--color-foreground)", opacity: leader ? 1 : 0.7 }}>{formatTasks(stat.completed_tasks)}</span><span className="rounded-full px-3 py-1 font-bold" style={{ backgroundColor: leader ? "#b45309" : stat.color, color: "#ffffff" }}>{formatPoints(stat.points)} P</span></li>; })}</ol></section>;
+}
+
+function QuickTaskOverview({ instances }: { instances: Instance[] }) {
+  const open = instances.filter((instance) => instance.status !== "DONE").slice(0, 4);
+  return <section className="rounded-3xl border p-5 sm:p-6" style={{ borderColor: "var(--color-border)", backgroundColor: "var(--color-background)" }}><div className="flex flex-wrap items-center justify-between gap-3"><div><p className="text-sm font-bold uppercase tracking-wide" style={{ color: "var(--color-secondary)" }}>Schnellüberblick</p><h2 className="text-3xl font-bold">Offene Aufgaben</h2></div><Link href="/tasks" className="button-secondary">Alle Aufgaben</Link></div><ul className="mt-4 grid gap-3">{open.length > 0 ? open.map((instance) => <TaskCard key={instance.id} instance={instance} readOnly />) : <li className="rounded-2xl border border-dashed p-6 text-center" style={{ borderColor: "var(--color-border)" }}>Alles erledigt – super!</li>}</ul></section>;
 }
 
 function TaskSections({ instances, currentMemberId, isParent, onComplete, onShare, onReopen, onUndo }: { instances: Instance[]; currentMemberId: number | null; isParent: boolean; onComplete: (id: number) => void; onShare: (id: number) => void; onReopen: (id: number) => void; onUndo: (id: number) => void }) {

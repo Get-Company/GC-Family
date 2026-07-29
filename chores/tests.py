@@ -200,6 +200,28 @@ class ChoreAuthorizationTests(TestCase):
         self.assertIn(free_instance.id, visible_ids)
         self.assertNotIn(sibling_instance.id, visible_ids)
 
+    def test_parent_can_complete_an_unassigned_task(self):
+        free_chore = Chore.objects.create(
+            household=self.household,
+            title="Freie Aufgabe",
+            created_by=self.parent,
+        )
+        free_instance = ChoreInstance.objects.create(
+            chore=free_chore,
+            due_date=dt.date.today(),
+        )
+        tokens = self._parent_tokens()
+        completed = self._post(
+            f"/api/chores/instances/{free_instance.id}/complete",
+            {"member_id": self.parent_member.id},
+            tokens["access"],
+        )
+        dashboard = self.client.get("/api/public/dashboard")
+
+        self.assertEqual(completed.status_code, 200)
+        self.assertEqual(completed.json()["status"], ChoreInstance.Status.DONE)
+        self.assertEqual(dashboard.status_code, 200)
+
     def test_stats_report_completed_points_and_streak_for_current_member(self):
         parent_tokens = self._parent_tokens()
         child_token = self._child_token(parent_tokens["access"])
