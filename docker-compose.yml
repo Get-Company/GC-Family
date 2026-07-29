@@ -25,6 +25,9 @@ services:
       DJANGO_SECRET_KEY: ${DJANGO_SECRET_KEY:?bitte in .env setzen}
       DJANGO_DEBUG: ${DJANGO_DEBUG:-False}
       DJANGO_ALLOWED_HOSTS: ${DJANGO_ALLOWED_HOSTS:-localhost,127.0.0.1,backend}
+      DJANGO_SECURE_SSL_REDIRECT: ${DJANGO_SECURE_SSL_REDIRECT:-True}
+      DJANGO_SESSION_COOKIE_SECURE: ${DJANGO_SESSION_COOKIE_SECURE:-True}
+      DJANGO_CSRF_COOKIE_SECURE: ${DJANGO_CSRF_COOKIE_SECURE:-True}
       CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-http://localhost:3000}
       CSRF_TRUSTED_ORIGINS: ${CSRF_TRUSTED_ORIGINS:-http://localhost:3000}
       DB_HOST: db
@@ -50,7 +53,9 @@ services:
     # Hinweis: Das /api-Rewrite-Ziel wird über das Build-Arg BACKEND_URL
     # (siehe build.args) zur Build-Zeit gesetzt, nicht zur Laufzeit.
     ports:
-      - "127.0.0.1:4711:3000"
+      # LAN-Zugriff für die direkte HTTP-Bereitstellung. Bei einem späteren
+      # HTTPS-Reverse-Proxy wieder auf 127.0.0.1:4711:3000 begrenzen.
+      - "4711:3000"
 
 volumes:
   pgdata:

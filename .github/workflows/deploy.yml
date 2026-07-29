@@ -33,4 +33,7 @@ jobs:
         run: docker compose --env-file .env up -d --build --remove-orphans
 
       - name: Verify service
-        run: curl --fail --silent --show-error http://127.0.0.1:4711/api/health
+        run: >-
+          curl --fail --silent --show-error
+          -H 'X-Forwarded-Proto: https'
+          http://127.0.0.1:4711/api/health
