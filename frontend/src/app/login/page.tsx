@@ -14,7 +14,7 @@ const KEYPAD_KEYS = ["1", "2", "3", "4", "5", "6", "7", "8", "9"];
 export default function LoginPage() {
   const router = useRouter();
   const { state, loginWithPin } = useAuth();
-  const { play } = useSound();
+  const { play, playPinKey } = useSound();
   const [pin, setPin] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
@@ -49,6 +49,9 @@ export default function LoginPage() {
   }
 
   function updatePin(nextPin: string) {
+    if (nextPin.length > pin.length) {
+      playPinKey(nextPin.at(-1) ?? "");
+    }
     setPin(nextPin);
     setError(null);
     if (nextPin.length === 6) void login(nextPin);

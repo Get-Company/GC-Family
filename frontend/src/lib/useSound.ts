@@ -10,6 +10,20 @@ type SoundName = "success" | "click" | "error";
 export type JingleName = "SPARKLE" | "BELL" | "FANFARE" | "BUBBLE" | "CELEBRATE" | "SOFT" | "DOWNBEAT" | "RAIN" | "PLOP" | "RESET";
 
 const MUTE_KEY = "gcfamily:muted";
+// Chromatische Folge E3–C4. Da das Nummernfeld zehn Ziffern hat, wiederholen
+// 9 und 0 das abschließende C4; die Vorgabe 0 = C4 bleibt damit erhalten.
+const PIN_KEY_FREQUENCIES: Record<string, number> = {
+  "1": 164.81, // E3
+  "2": 174.61, // F3
+  "3": 185.0, // F#3
+  "4": 196.0, // G3
+  "5": 207.65, // G#3
+  "6": 220.0, // A3
+  "7": 233.08, // A#3
+  "8": 246.94, // B3
+  "9": 261.63, // C4
+  "0": 261.63, // C4
+};
 
 function playTone(
   ctx: AudioContext,
@@ -33,6 +47,14 @@ function playTone(
   osc.connect(gain).connect(ctx.destination);
   osc.start(ctx.currentTime + start);
   osc.stop(ctx.currentTime + start + duration);
+}
+
+function playPianoTone(ctx: AudioContext, freq: number) {
+  // Drei abklingende Obertöne ergeben einen kurzen, klavierähnlichen Klang —
+  // vollständig im Browser erzeugt und ohne fremde Audiodateien.
+  playTone(ctx, freq, 0, 0.62, "triangle", 0.11);
+  playTone(ctx, freq * 2, 0, 0.38, "sine", 0.04);
+  playTone(ctx, freq * 3, 0, 0.22, "sine", 0.018);
 }
 
 export function useSound() {
@@ -75,6 +97,18 @@ export function useSound() {
       }
     },
     [muted, ensureCtx],
+  );
+
+  const playPinKey = useCallback(
+    (digit: string) => {
+      if (muted) return;
+      const freq = PIN_KEY_FREQUENCIES[digit];
+      if (!freq) return;
+      const ctx = ensureCtx();
+      if (!ctx) return;
+      playPianoTone(ctx, freq);
+    },
+    [ensureCtx, muted],
   );
 
   const playJingle = useCallback((jingle: string, fallback: SoundName = "success") => {
@@ -132,5 +166,5 @@ export function useSound() {
     });
   }, []);
 
-  return { play, playJingle, muted, toggleMuted };
+  return { play, playPinKey, playJingle, muted, toggleMuted };
 }
