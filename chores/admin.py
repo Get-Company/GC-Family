@@ -25,10 +25,18 @@ class ChoreAdmin(admin.ModelAdmin):
 
 @admin.register(ChoreInstance)
 class ChoreInstanceAdmin(admin.ModelAdmin):
-    list_display = ("chore", "due_date", "assigned_member", "status", "completed_at")
+    list_display = (
+        "chore",
+        "due_date",
+        "assigned_member",
+        "status",
+        "completed_by",
+        "completed_at",
+    )
     list_filter = ("status", "due_date")
     search_fields = ("chore__title",)
     date_hierarchy = "due_date"
+    list_select_related = ("chore", "assigned_member", "completed_by")
     inlines = [ChoreContributionInline]
 
 
@@ -36,4 +44,7 @@ class ChoreInstanceAdmin(admin.ModelAdmin):
 class ChoreContributionAdmin(admin.ModelAdmin):
     list_display = ("instance", "member", "share", "completed_at")
     list_filter = ("member",)
+    search_fields = ("instance__chore__title", "member__display_name")
     date_hierarchy = "completed_at"
+    list_select_related = ("instance__chore", "member")
+    readonly_fields = ("instance", "member", "share", "completed_at")

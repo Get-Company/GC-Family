@@ -145,11 +145,7 @@ export default function Dashboard() {
           <p className="mt-1 text-sm" style={{ opacity: 0.7 }}>{formatDate(start)} – {formatDate(end)} · neue Woche ab Sonntag, 00:00 Uhr</p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <Link href="/" className="button-secondary">Dashboard</Link>
-          <Link href="/tasks" className="button-secondary">Aufgaben</Link>
-          <Link href="/scoreboard" className="button-secondary">Scoreboard</Link>
-          {currentMember && <Link href="/profile" className="button-secondary">Profil</Link>}
-          {isParent ? <><Link href="/history" className="button-secondary">Verlauf</Link><Link href="/manage" className="button-secondary">Verwalten</Link>{canAccessBackend && <Link href="/admin/" className="button-secondary">Backend</Link>}<button type="button" onClick={logout} className="button-secondary">Abmelden</button></> : activeChild ? <button type="button" onClick={logout} className="button-secondary">{activeChild.emoji} abmelden</button> : <Link href="/login" className="button-secondary">Mit PIN anmelden</Link>}
+          {isParent ? <><Link href="/history" className="button-secondary">Verlauf</Link>{canAccessBackend && <Link href="/admin/" className="button-secondary">Backend</Link>}<button type="button" onClick={logout} className="button-secondary">Abmelden</button></> : activeChild ? <button type="button" onClick={logout} className="button-secondary">{activeChild.emoji} abmelden</button> : <Link href="/login" className="button-secondary">Mit PIN anmelden</Link>}
         </div>
       </header>
 

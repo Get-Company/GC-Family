@@ -39,6 +39,29 @@ services:
       - staticfiles:/app/staticfiles
       - media:/app/media
 
+  scheduler:
+    build: .
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DJANGO_SECRET_KEY: ${DJANGO_SECRET_KEY:?bitte in .env setzen}
+      DJANGO_DEBUG: ${DJANGO_DEBUG:-False}
+      DJANGO_ALLOWED_HOSTS: ${DJANGO_ALLOWED_HOSTS:-localhost,127.0.0.1,backend}
+      DB_HOST: db
+      DB_PORT: "5432"
+      DB_NAME: ${DB_NAME:-gcfamily}
+      DB_USER: ${DB_USER:-gcfamily}
+      DB_PASSWORD: ${DB_PASSWORD:-changeme}
+    entrypoint: []
+    command:
+      - /bin/sh
+      - -c
+      - >-
+        until python manage.py materialize_chores --horizon 21; do sleep 10; done;
+        while sleep 3600; do python manage.py materialize_chores --horizon 21; done
+
   frontend:
     build:
       context: ./frontend

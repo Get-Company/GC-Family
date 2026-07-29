@@ -37,7 +37,7 @@ export function ThemeToggle() {
       onClick={toggle}
       aria-label={dark ? "Hellen Modus aktivieren" : "Dunklen Modus aktivieren"}
       title={dark ? "Heller Modus" : "Dunkler Modus"}
-      className="fixed right-3 top-3 z-50 flex h-12 w-12 cursor-pointer items-center justify-center rounded-full border shadow-lg transition-all hover:-translate-y-0.5 focus-visible:outline-none focus-visible:ring-2"
+      className="flex h-11 w-11 cursor-pointer items-center justify-center rounded-xl border transition-all hover:-translate-y-0.5 focus-visible:outline-none focus-visible:ring-2"
       style={{ borderColor: "var(--color-border)", backgroundColor: "var(--color-background)", color: "var(--color-foreground)" }}
     >
       {dark ? <SunIcon /> : <MoonIcon />}

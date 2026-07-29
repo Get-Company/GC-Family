@@ -4,7 +4,8 @@ import json
 from django.test import TestCase
 
 from accounts.models import FamilyMember, Household, User
-from chores.models import Chore, ChoreInstance
+from chores.models import Chore, ChoreInstance, RecurrenceRule
+from chores.services import materialize_chore
 
 
 class ChoreAuthorizationTests(TestCase):
@@ -221,6 +222,34 @@ class ChoreAuthorizationTests(TestCase):
         self.assertEqual(completed.status_code, 200)
         self.assertEqual(completed.json()["status"], ChoreInstance.Status.DONE)
         self.assertEqual(dashboard.status_code, 200)
+
+    def test_daily_recurrence_keeps_completed_history_and_creates_a_fresh_day(self):
+        today = dt.date.today()
+        chore = Chore.objects.create(
+            household=self.household,
+            title="Tägliche Aufgabe",
+            is_recurring=True,
+            created_by=self.parent,
+        )
+        RecurrenceRule.objects.create(
+            chore=chore,
+            frequency=RecurrenceRule.Frequency.DAILY,
+            start_date=today,
+        )
+        materialize_chore(chore, today, today + dt.timedelta(days=1))
+        first = ChoreInstance.objects.get(chore=chore, due_date=today)
+        first.status = ChoreInstance.Status.DONE
+        first.completed_by = self.child
+        first.save(update_fields=["status", "completed_by"])
+
+        materialize_chore(chore, today + dt.timedelta(days=1), today + dt.timedelta(days=2))
+
+        first.refresh_from_db()
+        self.assertEqual(first.status, ChoreInstance.Status.DONE)
+        self.assertEqual(
+            set(ChoreInstance.objects.filter(chore=chore).values_list("due_date", flat=True)),
+            {today, today + dt.timedelta(days=1), today + dt.timedelta(days=2)},
+        )
 
     def test_stats_report_completed_points_and_streak_for_current_member(self):
         parent_tokens = self._parent_tokens()
