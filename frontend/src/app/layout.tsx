@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 import { Baloo_2, Bungee, Comic_Neue } from "next/font/google";
 
 import { AuthProvider } from "@/lib/AuthProvider";
@@ -46,7 +47,7 @@ export default function RootLayout({
       <body className="min-h-full flex flex-col">
         <AnimatedShaderBackground />
         <div className="relative z-10 flex min-h-full flex-1 flex-col">
-          <AuthProvider><SoundFeedback /><div className="sticky top-0 z-40 flex min-h-15 border-b shadow-sm" style={{ borderColor: "var(--color-border)", backgroundColor: "color-mix(in srgb, var(--color-background) 88%, transparent)", backdropFilter: "blur(16px)" }}><MainNavigation /><div className="flex shrink-0 items-center pr-3"><ThemeToggle /></div></div><VersionBadge />{children}</AuthProvider>
+          <AuthProvider><SoundFeedback /><div className="sticky top-0 z-40 grid min-h-15 grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-1 border-b px-2 shadow-sm sm:px-4" style={{ borderColor: "var(--color-border)", backgroundColor: "color-mix(in srgb, var(--color-background) 88%, transparent)", backdropFilter: "blur(16px)" }}><Link href="/" className="shrink-0 text-sm font-bold sm:text-base" style={{ color: "var(--color-primary)" }}>GC-Family</Link><MainNavigation /><ThemeToggle /></div><VersionBadge />{children}</AuthProvider>
         </div>
       </body>
     </html>
