@@ -9,9 +9,9 @@ import { useAuth } from "@/lib/AuthProvider";
 import { useSound } from "@/lib/useSound";
 
 const items = [
-  { href: "/", label: "Dashboard", icon: HomeIcon },
-  { href: "/tasks", label: "Aufgaben", icon: TaskIcon },
-  { href: "/scoreboard", label: "Punkte", icon: TrophyIcon },
+  { href: "/", label: "Übersicht", icon: HomeIcon, color: "#2563eb", glow: "#bfdbfe" },
+  { href: "/tasks", label: "Aufgaben", icon: TaskIcon, color: "#db2777", glow: "#fbcfe8" },
+  { href: "/scoreboard", label: "Punkte", icon: TrophyIcon, color: "#d97706", glow: "#fde68a" },
 ];
 
 export function MainNavigation() {
@@ -52,18 +52,18 @@ export function MainNavigation() {
     if (nextPin.length === 6) void login(nextPin);
   }
 
-  return <><nav aria-label="Hauptnavigation" className="flex w-full items-start justify-center gap-2 px-3 py-3 sm:gap-4">
-    {items.map(({ href, label, icon: Icon }) => <NavItem key={href} href={href} label={label} active={pathname === href}><Icon /></NavItem>)}
-    {currentMember ? <NavItem href="/profile" label="Profil" active={pathname === "/profile"}><ProfileIcon /></NavItem> : <NavButton label="Anmelden" onClick={() => { setError(null); setPin(""); setLoginOpen(true); }}><ProfileIcon /></NavButton>}
+  return <><nav aria-label="Hauptnavigation" className="mx-auto flex w-full max-w-xl items-stretch justify-center gap-1.5 px-3 py-2.5 sm:gap-2">
+    {items.map(({ href, label, icon: Icon, color, glow }) => <NavItem key={href} href={href} label={label} active={pathname === href} color={color} glow={glow}><Icon /></NavItem>)}
+    {currentMember ? <NavItem href="/profile" label="Profil" active={pathname === "/profile"} color="#7c3aed" glow="#ddd6fe"><ProfileIcon /></NavItem> : <NavButton label="Anmelden" color="#7c3aed" glow="#ddd6fe" onClick={() => { setError(null); setPin(""); setLoginOpen(true); }}><ProfileIcon /></NavButton>}
   </nav>{loginOpen && <PinLoginModal pin={pin} pending={pending} error={error} onClose={() => !pending && setLoginOpen(false)} onPinChange={updatePin} />}</>;
 }
 
-function NavItem({ href, label, active, children }: { href: string; label: string; active: boolean; children: React.ReactNode }) {
-  return <Link href={href} aria-label={label} title={label} className="group flex w-14 shrink-0 flex-col items-center gap-1 text-[11px] font-bold leading-none transition-colors focus-visible:outline-none focus-visible:ring-2" style={{ color: active ? "var(--color-primary)" : "var(--color-foreground)" }}><span className="flex h-11 w-11 items-center justify-center rounded-2xl border shadow-sm transition-all group-hover:-translate-y-0.5" style={{ borderColor: active ? "var(--color-primary)" : "var(--color-border)", backgroundColor: active ? "var(--color-primary)" : "var(--color-button-surface)", color: active ? "var(--color-on-primary)" : "inherit" }}>{children}</span><span>{label}</span></Link>;
+function NavItem({ href, label, active, color, glow, children }: { href: string; label: string; active: boolean; color: string; glow: string; children: React.ReactNode }) {
+  return <Link href={href} aria-current={active ? "page" : undefined} aria-label={label} title={label} className="group relative flex min-w-0 flex-1 flex-col items-center justify-center gap-1 rounded-2xl px-1 py-1.5 text-[11px] font-bold leading-none transition-all focus-visible:outline-none focus-visible:ring-2" style={{ color: active ? color : "var(--color-foreground)", background: active ? `linear-gradient(135deg, ${glow}cc, ${color}16)` : "transparent", boxShadow: active ? `inset 0 0 0 1px ${color}35, 0 7px 18px ${color}20` : "none" }}><span className="flex h-11 w-11 items-center justify-center rounded-2xl border-2 shadow-sm transition-all duration-200 group-hover:-translate-y-1 group-hover:rotate-[-4deg]" style={{ borderColor: active ? color : `${color}45`, backgroundColor: active ? color : "var(--color-button-surface)", color: active ? "#ffffff" : color, boxShadow: active ? `0 6px 0 ${color}55` : "0 2px 0 rgba(15,23,42,0.08)" }}>{children}</span><span className="truncate">{label}</span>{active && <span className="absolute -bottom-0.5 h-1 w-6 rounded-full" style={{ backgroundColor: color }} />}</Link>;
 }
 
-function NavButton({ label, onClick, children }: { label: string; onClick: () => void; children: React.ReactNode }) {
-  return <button type="button" onClick={onClick} aria-label={label} title={label} className="group flex w-14 shrink-0 flex-col items-center gap-1 text-[11px] font-bold leading-none transition-colors focus-visible:outline-none focus-visible:ring-2" style={{ color: "var(--color-foreground)" }}><span className="flex h-11 w-11 items-center justify-center rounded-2xl border shadow-sm transition-all group-hover:-translate-y-0.5" style={{ borderColor: "var(--color-border)", backgroundColor: "var(--color-button-surface)" }}>{children}</span><span>{label}</span></button>;
+function NavButton({ label, color, glow, onClick, children }: { label: string; color: string; glow: string; onClick: () => void; children: React.ReactNode }) {
+  return <button type="button" onClick={onClick} aria-label={label} title={label} className="group flex min-w-0 flex-1 flex-col items-center justify-center gap-1 rounded-2xl px-1 py-1.5 text-[11px] font-bold leading-none transition-all focus-visible:outline-none focus-visible:ring-2" style={{ color: "var(--color-foreground)", background: `linear-gradient(135deg, ${glow}70, transparent)` }}><span className="flex h-11 w-11 items-center justify-center rounded-2xl border-2 shadow-sm transition-all duration-200 group-hover:-translate-y-1 group-hover:rotate-[4deg]" style={{ borderColor: `${color}55`, backgroundColor: "var(--color-button-surface)", color, boxShadow: "0 2px 0 rgba(15,23,42,0.08)" }}>{children}</span><span className="truncate">{label}</span></button>;
 }
 
 function PinLoginModal({ pin, pending, error, onClose, onPinChange }: { pin: string; pending: boolean; error: string | null; onClose: () => void; onPinChange: (pin: string) => void }) {

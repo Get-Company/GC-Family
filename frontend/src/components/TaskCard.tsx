@@ -57,6 +57,7 @@ export function TaskCard({
 }: Props) {
   const done = instance.status === "DONE";
   const partial = instance.status === "PARTIAL";
+  const canToggleDone = done && ((canUndo && Boolean(onUndo)) || Boolean(onReopen));
   const completedAt = instance.completed_at
     ? new Intl.DateTimeFormat("de-DE", {
         dateStyle: "short",
@@ -137,9 +138,21 @@ export function TaskCard({
         {/* Abhaken-Button */}
         <motion.button
           type="button"
-          onClick={() => !done && !partial && !readOnly && onComplete?.(instance.id)}
-          disabled={done || partial || readOnly}
-          aria-label={done ? "Erledigt" : partial ? "Wird gemeinsam erledigt" : `${instance.title} als erledigt markieren`}
+          onClick={() => {
+            if (readOnly || partial) return;
+            if (done && canUndo && onUndo) {
+              onUndo(instance.id);
+              return;
+            }
+            if (done && onReopen) {
+              onReopen(instance.id);
+              return;
+            }
+            if (!done) onComplete?.(instance.id);
+          }}
+          disabled={partial || readOnly || (done && !canToggleDone)}
+          aria-label={done ? canUndo ? `${instance.title}: meinen Anteil zurücknehmen` : "Aufgabe wieder öffnen" : partial ? "Wird gemeinsam erledigt" : `${instance.title} als erledigt markieren`}
+          title={done ? canUndo ? "Zum Zurücknehmen erneut antippen" : "Zum Wiederöffnen erneut antippen" : "Als erledigt markieren"}
           whileTap={{ scale: 0.9 }}
           className="relative flex h-12 w-12 cursor-pointer items-center justify-center rounded-full border-2 transition-colors disabled:cursor-default focus-visible:outline-none focus-visible:ring-2"
           style={{
@@ -172,26 +185,6 @@ export function TaskCard({
             )}
           </AnimatePresence>
         </motion.button>
-        {canUndo && onUndo && (
-          <button
-            type="button"
-            onClick={() => onUndo(instance.id)}
-            className="touch-action cursor-pointer rounded-lg px-3 py-2 text-xs font-bold transition-colors focus-visible:outline-none focus-visible:ring-2"
-            style={{ color: "var(--color-destructive)" }}
-          >
-            Meinen Anteil zurücknehmen
-          </button>
-        )}
-        {done && onReopen && !canUndo && (
-          <button
-            type="button"
-            onClick={() => onReopen(instance.id)}
-            className="cursor-pointer text-xs font-bold underline focus-visible:outline-none focus-visible:ring-2"
-            style={{ color: "var(--color-destructive)" }}
-          >
-            Rückgängig
-          </button>
-        )}
         {!done && onShare && !readOnly && (
           <button type="button" onClick={() => onShare(instance.id)} className="touch-action inline-flex min-h-11 items-center justify-center gap-1.5 cursor-pointer rounded-xl border px-3 py-2 text-xs font-bold transition-all hover:-translate-y-0.5 focus-visible:outline-none focus-visible:ring-2" style={{ color: "var(--color-accent)", borderColor: "var(--color-accent)", backgroundColor: "color-mix(in srgb, var(--color-accent) 10%, transparent)" }}>
             <ShareIcon />
