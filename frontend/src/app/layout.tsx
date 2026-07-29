@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Baloo_2, Bungee, Comic_Neue } from "next/font/google";
 
 import { AuthProvider } from "@/lib/AuthProvider";
+import { AnimatedShaderBackground } from "@/components/AnimatedShaderBackground";
 import { SoundFeedback } from "@/components/SoundFeedback";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { VersionBadge } from "@/components/VersionBadge";
@@ -42,7 +43,10 @@ export default function RootLayout({
       className={`${baloo.variable} ${comic.variable} ${bungee.variable} h-full antialiased`}
     >
       <body className="min-h-full flex flex-col">
-        <AuthProvider><SoundFeedback /><ThemeToggle /><VersionBadge />{children}</AuthProvider>
+        <AnimatedShaderBackground />
+        <div className="relative z-10 flex min-h-full flex-1 flex-col">
+          <AuthProvider><SoundFeedback /><ThemeToggle /><VersionBadge />{children}</AuthProvider>
+        </div>
       </body>
     </html>
   );
