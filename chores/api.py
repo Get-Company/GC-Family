@@ -373,6 +373,7 @@ def stats(request):
 
 
 @transaction.atomic
+@transaction.atomic
 @router.post("/instances/{instance_id}/complete", response=InstanceOut)
 def complete_instance(request, instance_id: int, payload: CompleteIn):
     auth = current_auth(request)
