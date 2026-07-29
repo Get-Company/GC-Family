@@ -372,10 +372,13 @@ def stats(request):
     return {"points_today": points_today, "current_streak": streak}
 
 
-@transaction.atomic
-@transaction.atomic
 @router.post("/instances/{instance_id}/complete", response=InstanceOut)
 def complete_instance(request, instance_id: int, payload: CompleteIn):
+    return _complete_instance_atomic(request, instance_id, payload)
+
+
+@transaction.atomic
+def _complete_instance_atomic(request, instance_id: int, payload: CompleteIn):
     auth = current_auth(request)
     instance = get_object_or_404(
         ChoreInstance.objects.select_for_update(),
@@ -441,9 +444,13 @@ def complete_instance(request, instance_id: int, payload: CompleteIn):
     return _with_instance_details(ChoreInstance.objects.filter(id=instance.id)).get()
 
 
-@transaction.atomic
 @router.post("/instances/{instance_id}/uncomplete", response=InstanceOut)
 def uncomplete_instance(request, instance_id: int):
+    return _uncomplete_instance_atomic(request, instance_id)
+
+
+@transaction.atomic
+def _uncomplete_instance_atomic(request, instance_id: int):
     """Nimmt den eigenen vollständigen oder halben Aufgabenanteil zurück."""
     auth = current_auth(request)
     instance = get_object_or_404(
