@@ -184,7 +184,10 @@ export const updateChildMember = (
   payload: { display_name: string; pin?: string; color?: string; emoji?: string; completion_jingle?: string; undo_jingle?: string },
 ) => apiPut<ManagedMember>(`/auth/household/manage-members/children/${id}`, payload);
 
+export const updateOwnChildPin = (pin: string) =>
+  apiPut<Member>("/auth/me/pin", { pin });
+
 export const updateParentMember = (
   id: number,
-  payload: { display_name: string; pin?: string; color?: string; emoji?: string },
+  payload: { display_name: string; email: string; pin?: string; color?: string; emoji?: string },
 ) => apiPut<ManagedMember>(`/auth/household/manage-members/parents/${id}`, payload);

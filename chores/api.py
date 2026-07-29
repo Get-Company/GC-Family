@@ -383,6 +383,8 @@ def complete_instance(request, instance_id: int, payload: CompleteIn):
     existing = list(instance.contributions.select_related("member").all())
     if instance.status in {ChoreInstance.Status.DONE, ChoreInstance.Status.SKIPPED}:
         raise HttpError(409, "Diese Aufgabe ist bereits abgeschlossen.")
+    if instance.active_until and dt.date.today() > instance.active_until:
+        raise HttpError(409, "Diese Aufgabe ist außerhalb ihres Erledigungszeitraums.")
     if any(contribution.member_id == member.id for contribution in existing):
         raise HttpError(409, "Du hast bereits einen Anteil dieser Aufgabe übernommen.")
 
@@ -549,8 +551,9 @@ def _materialize_after_change(chore: Chore, payload: ChoreIn) -> None:
     """Aktualisiert nur offene, zukünftige Instanzen und bewahrt erledigte Historie."""
     ChoreInstance.objects.filter(
         chore=chore,
-        due_date__gte=dt.date.today(),
         status=ChoreInstance.Status.OPEN,
+    ).filter(
+        Q(due_date__gte=dt.date.today()) | Q(active_until__gte=dt.date.today())
     ).delete()
     if chore.is_recurring:
         # Die frische Abfrage vermeidet einen leeren Reverse-Relation-Cache

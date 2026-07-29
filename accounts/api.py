@@ -99,9 +99,14 @@ class ChildMemberUpdateIn(Schema):
 
 class ParentMemberUpdateIn(Schema):
     display_name: str
+    email: str
     pin: str | None = None
     color: str = "#2563eb"
     emoji: str = ""
+
+
+class PinUpdateIn(Schema):
+    pin: str
 
 
 class AccessTokenOut(Schema):
@@ -244,6 +249,19 @@ def child_login(request, payload: PinIn):
     if member is None or not member.check_pin(payload.pin):
         raise HttpError(401, "Die PIN ist nicht korrekt.")
     return {"access": _access_for_member(member)}
+
+
+@router.put("/me/pin", response=AuthMemberOut, auth=family_jwt_auth)
+def update_own_child_pin(request, payload: PinUpdateIn):
+    """Ein angemeldetes Kind darf ausschließlich seine eigene PIN ändern."""
+    auth = current_auth(request)
+    if auth.member.role != FamilyMember.Role.CHILD:
+        raise HttpError(403, "Eltern ändern ihre PIN im Elternbereich.")
+    _validate_pin(payload.pin)
+    _ensure_pin_available(payload.pin, exclude_id=auth.member.id)
+    auth.member.set_pin(payload.pin)
+    auth.member.save(update_fields=["pin_hash"])
+    return auth.member
 
 
 def _validate_pin(pin: str) -> None:
@@ -423,9 +441,19 @@ def update_parent_member(request, member_id: int, payload: ParentMemberUpdateIn)
     member = get_object_or_404(
         FamilyMember, id=member_id, household=auth.household, role=FamilyMember.Role.PARENT
     )
-    if not payload.display_name.strip():
-        raise HttpError(422, "Ein Name ist erforderlich.")
-    member.display_name = payload.display_name.strip()
+    display_name = payload.display_name.strip()
+    email = payload.email.strip().lower()
+    if not display_name or not email:
+        raise HttpError(422, "Name und E-Mail-Adresse sind erforderlich.")
+    if member.user_id is None:
+        raise HttpError(422, "Für dieses Elternprofil fehlt ein Benutzerkonto.")
+    if User.objects.filter(email__iexact=email).exclude(id=member.user_id).exists():
+        raise HttpError(409, "Diese E-Mail-Adresse wird bereits verwendet.")
+
+    member.user.email = email
+    member.user.username = email
+    member.user.save(update_fields=["email", "username"])
+    member.display_name = display_name
     member.color = payload.color
     member.emoji = payload.emoji
     update_fields = ["display_name", "color", "emoji"]

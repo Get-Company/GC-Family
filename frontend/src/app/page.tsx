@@ -10,6 +10,7 @@ import {
   getPublicDashboard,
   reopenInstance,
   uncompleteInstance,
+  updateOwnChildPin,
   type Instance,
   type Member,
   type MemberWeeklyStats,
@@ -26,6 +27,9 @@ export default function Dashboard() {
   const [filter, setFilter] = useState<number | null>(null);
   const [statusFilter, setStatusFilter] = useState<"ALL" | "OPEN" | "DONE">("ALL");
   const [error, setError] = useState<string | null>(null);
+  const [newChildPin, setNewChildPin] = useState("");
+  const [childPinStatus, setChildPinStatus] = useState<string | null>(null);
+  const [childPinPending, setChildPinPending] = useState(false);
   const { play, playJingle } = useSound();
 
   const loadDashboard = useCallback(async () => {
@@ -100,6 +104,24 @@ export default function Dashboard() {
     }
   }
 
+  async function changeOwnChildPin() {
+    if (!activeChild || newChildPin.length !== 6) {
+      setChildPinStatus("Bitte gib eine sechsstellige PIN ein.");
+      return;
+    }
+    setChildPinPending(true);
+    setChildPinStatus(null);
+    try {
+      await updateOwnChildPin(newChildPin);
+      setNewChildPin("");
+      setChildPinStatus("Deine PIN wurde geändert.");
+    } catch {
+      setChildPinStatus("Die PIN konnte nicht geändert werden. Sie darf noch nicht verwendet werden.");
+    } finally {
+      setChildPinPending(false);
+    }
+  }
+
   const { start, end } = currentWeekBounds();
 
   return (
@@ -117,7 +139,7 @@ export default function Dashboard() {
       </header>
 
       <section className="grid gap-5 lg:grid-cols-[0.95fr_1.05fr]">
-        <ProfilePanel activeMember={currentMember} />
+        <ProfilePanel activeMember={currentMember} childPin={newChildPin} childPinPending={childPinPending} childPinStatus={childPinStatus} onChildPinChange={setNewChildPin} onChangeOwnChildPin={() => void changeOwnChildPin()} />
         <Scoreboard stats={rankedStats} />
       </section>
 
@@ -130,8 +152,8 @@ export default function Dashboard() {
   );
 }
 
-function ProfilePanel({ activeMember }: { activeMember: Member | null }) {
-  if (activeMember) return <section className="rounded-3xl border p-5 sm:p-6" style={{ borderColor: "var(--color-border)", backgroundColor: `${activeMember.color}12` }}><p className="text-sm font-bold uppercase tracking-wide" style={{ color: activeMember.color }}>Profil aktiv</p><h2 className="mt-1 text-3xl font-bold">{activeMember.emoji} {activeMember.display_name}</h2><InspirationalQuote key={activeMember.id} /><p className="mt-3 text-sm" style={{ opacity: 0.75 }}>{activeMember.role === "PARENT" ? "Du kannst Aufgaben verwalten und deine eigenen Aufgaben erledigen." : "Du kannst deine Aufgaben erledigen oder einen halben Anteil übernehmen."}</p></section>;
+function ProfilePanel({ activeMember, childPin, childPinPending, childPinStatus, onChildPinChange, onChangeOwnChildPin }: { activeMember: Member | null; childPin: string; childPinPending: boolean; childPinStatus: string | null; onChildPinChange: (pin: string) => void; onChangeOwnChildPin: () => void }) {
+  if (activeMember) return <section className="rounded-3xl border p-5 sm:p-6" style={{ borderColor: "var(--color-border)", backgroundColor: `${activeMember.color}12` }}><p className="text-sm font-bold uppercase tracking-wide" style={{ color: activeMember.color }}>Profil aktiv</p><h2 className="mt-1 text-3xl font-bold">{activeMember.emoji} {activeMember.display_name}</h2><InspirationalQuote key={activeMember.id} /><p className="mt-3 text-sm" style={{ opacity: 0.75 }}>{activeMember.role === "PARENT" ? "Du kannst Aufgaben verwalten und deine eigenen Aufgaben erledigen." : "Du kannst deine Aufgaben erledigen oder einen halben Anteil übernehmen."}</p>{activeMember.role === "CHILD" && <div className="mt-4 border-t pt-4" style={{ borderColor: "var(--color-border)" }}><p className="text-sm font-bold">Eigene PIN ändern</p><div className="mt-2 flex flex-wrap gap-2"><input type="password" inputMode="numeric" pattern="[0-9]{6}" maxLength={6} value={childPin} onChange={(event) => onChildPinChange(event.target.value.replace(/\D/g, ""))} placeholder="Neue 6-stellige PIN" className="input max-w-52 py-2" aria-label="Neue eigene PIN" /><button type="button" disabled={childPinPending} onClick={onChangeOwnChildPin} className="touch-action cursor-pointer rounded-xl px-3 py-2 text-sm font-bold text-white disabled:opacity-50" style={{ backgroundColor: "var(--color-primary)" }}>PIN speichern</button></div>{childPinStatus && <p className="mt-2 text-sm font-semibold" style={{ color: childPinStatus.startsWith("Deine") ? "var(--color-secondary)" : "var(--color-destructive)" }}>{childPinStatus}</p>}</div>}</section>;
   return <section className="rounded-3xl border p-5 sm:p-6" style={{ borderColor: "var(--color-border)" }}><p className="text-sm font-bold uppercase tracking-wide" style={{ color: "var(--color-primary)" }}>PIN-Login</p><h2 className="mt-1 text-3xl font-bold">Wer hilft heute mit?</h2><p className="mt-1 text-sm" style={{ opacity: 0.7 }}>Mit deiner sechsstelligen PIN wird dein Profil automatisch erkannt.</p><Link href="/login" className="touch-action mt-4 inline-flex items-center rounded-xl px-5 py-3 font-bold text-white" style={{ backgroundColor: "var(--color-primary)" }}>Mit PIN anmelden</Link></section>;
 }
 

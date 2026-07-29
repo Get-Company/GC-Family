@@ -106,6 +106,33 @@ class ChoreAuthorizationTests(TestCase):
         self.assertEqual([item["id"] for item in instances.json()], [self.instance.id])
         self.assertEqual(foreign.status_code, 404)
 
+    def test_weekly_chore_without_weekday_is_open_for_the_full_family_week(self):
+        tokens = self._parent_tokens()
+        today = dt.date.today()
+        created = self._post(
+            "/api/chores",
+            {
+                "title": "Flexible Wochenaufgabe",
+                "points": 10,
+                "is_recurring": True,
+                "recurrence": {
+                    "frequency": "WEEKLY",
+                    "interval": 1,
+                    "weekdays": [],
+                    "start_date": today.isoformat(),
+                },
+            },
+            tokens["access"],
+        )
+        week_start = today - dt.timedelta(days=(today.weekday() + 1) % 7)
+
+        self.assertEqual(created.status_code, 200)
+        instance = ChoreInstance.objects.get(
+            chore_id=created.json()["id"], due_date=week_start
+        )
+        self.assertEqual(instance.due_date, week_start)
+        self.assertEqual(instance.active_until, week_start + dt.timedelta(days=6))
+
     def test_child_can_complete_own_task_but_cannot_skip_or_view_others(self):
         parent_tokens = self._parent_tokens()
         child_token = self._child_token(parent_tokens["access"])

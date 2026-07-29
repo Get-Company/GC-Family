@@ -20,6 +20,23 @@ def _months_between(a: dt.date, b: dt.date) -> int:
     return (b.year - a.year) * 12 + (b.month - a.month)
 
 
+def _week_start(day: dt.date) -> dt.date:
+    """Sonntag als Beginn der in der Oberfläche verwendeten Familienwoche."""
+    return day - dt.timedelta(days=(day.weekday() + 1) % 7)
+
+
+def _flexible_week_matches(rule: RecurrenceRule, week_start: dt.date) -> bool:
+    """Prüft eine wöchentliche Aufgabe ohne festen Wochentag pro Wochenfenster."""
+    week_end = week_start + dt.timedelta(days=6)
+    if week_end < rule.start_date:
+        return False
+    if rule.end_date and week_start > rule.end_date:
+        return False
+    anchor = _week_start(rule.start_date)
+    weeks = (week_start - anchor).days // 7
+    return weeks >= 0 and weeks % rule.interval == 0
+
+
 def rule_matches(rule: RecurrenceRule, day: dt.date) -> bool:
     """Trifft die Wiederholungsregel auf diesen Tag zu?"""
     if day < rule.start_date:
@@ -31,7 +48,11 @@ def rule_matches(rule: RecurrenceRule, day: dt.date) -> bool:
         return (day - rule.start_date).days % rule.interval == 0
 
     if rule.frequency == RecurrenceRule.Frequency.WEEKLY:
-        weekdays = rule.weekdays or [rule.start_date.weekday()]
+        # Regeln ohne Wochentag werden in materialize_chore als Wochenfenster
+        # behandelt, nicht als zufällig am Startdatum fällige Tagesaufgabe.
+        if not rule.weekdays:
+            return False
+        weekdays = rule.weekdays
         if day.weekday() not in weekdays:
             return False
         weeks = (day - rule.start_date).days // 7
@@ -59,6 +80,31 @@ def materialize_chore(
         return []
 
     created: list[ChoreInstance] = []
+    if rule.frequency == RecurrenceRule.Frequency.WEEKLY and not rule.weekdays:
+        week_start = _week_start(start)
+        while week_start <= end:
+            if _flexible_week_matches(rule, week_start):
+                week_end = week_start + dt.timedelta(days=6)
+                if rule.end_date:
+                    week_end = min(week_end, rule.end_date)
+                instance, was_created = ChoreInstance.objects.get_or_create(
+                    chore=chore,
+                    due_date=week_start,
+                    defaults={
+                        "assigned_member": chore.default_assignee,
+                        "active_until": week_end,
+                    },
+                )
+                if was_created:
+                    assignees = list(chore.default_assignees.all())
+                    if assignees:
+                        instance.assigned_members.set(assignees)
+                        instance.assigned_member = assignees[0]
+                        instance.save(update_fields=["assigned_member"])
+                    created.append(instance)
+            week_start += dt.timedelta(days=7)
+        return created
+
     day = start
     while day <= end:
         if rule_matches(rule, day):

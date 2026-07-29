@@ -96,6 +96,22 @@ class AuthApiTests(TestCase):
         self.assertEqual(me.status_code, 200)
         self.assertEqual(me.json()["member"]["id"], self.child.id)
 
+    def test_child_can_change_only_own_pin(self):
+        child_tokens = self._post(
+            "/api/auth/child-login", {"member_id": self.child.id, "pin": "123456"}
+        ).json()
+        changed = self.client.put(
+            "/api/auth/me/pin",
+            data=json.dumps({"pin": "654321"}),
+            content_type="application/json",
+            HTTP_AUTHORIZATION=f"Bearer {child_tokens['access']}",
+        )
+
+        self.assertEqual(changed.status_code, 200)
+        self.child.refresh_from_db()
+        self.assertTrue(self.child.check_pin("654321"))
+        self.assertFalse(self.child.check_pin("123456"))
+
     def test_parent_can_manage_members_and_child_pins(self):
         tokens = self._login()
         created_parent = self._post(
@@ -132,3 +148,28 @@ class AuthApiTests(TestCase):
         )
         self.assertEqual(members.status_code, 200)
         self.assertEqual(len(members.json()), 4)
+
+    def test_parent_can_change_another_parents_email(self):
+        tokens = self._login()
+        created_parent = self._post(
+            "/api/auth/household/manage-members/parents",
+            {"display_name": "Papa", "email": "papa@example.test", "pin": "222222"},
+            tokens["access"],
+        )
+        changed = self.client.put(
+            f"/api/auth/household/manage-members/parents/{created_parent.json()['id']}",
+            data=json.dumps(
+                {
+                    "display_name": "Papa",
+                    "email": "papa-neu@example.test",
+                    "color": "#2563eb",
+                    "emoji": "",
+                }
+            ),
+            content_type="application/json",
+            HTTP_AUTHORIZATION=f"Bearer {tokens['access']}",
+        )
+
+        self.assertEqual(changed.status_code, 200)
+        self.assertEqual(changed.json()["email"], "papa-neu@example.test")
+        self.assertEqual(User.objects.get(email="papa-neu@example.test").username, "papa-neu@example.test")

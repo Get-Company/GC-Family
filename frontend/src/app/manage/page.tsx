@@ -90,6 +90,7 @@ export default function ManagePage() {
   const [parentForm, setParentForm] = useState({ displayName: "", email: "", pin: "" });
   const [childForm, setChildForm] = useState({ displayName: "", pin: "" });
   const [newPins, setNewPins] = useState<Record<number, string>>({});
+  const [parentEmails, setParentEmails] = useState<Record<number, string>>({});
   const [jingles, setJingles] = useState<Record<number, { completion: string; undo: string }>>({});
   const [taskImage, setTaskImage] = useState<File | null>(null);
   const isParent =
@@ -249,11 +250,28 @@ export default function ManagePage() {
     setMemberPending(true);
     setMemberStatus(null);
     try {
-      await updateParentMember(member.id, { display_name: member.display_name, pin, color: member.color, emoji: member.emoji });
+      await updateParentMember(member.id, { display_name: member.display_name, email: parentEmails[member.id] ?? member.email ?? "", pin, color: member.color, emoji: member.emoji });
       setNewPins((pins) => ({ ...pins, [member.id]: "" }));
       setMemberStatus(`PIN für ${member.display_name} geändert.`);
     } catch {
       setMemberStatus("PIN konnte nicht geändert werden. Sie muss aus sechs Ziffern bestehen und darf noch nicht verwendet werden.");
+    } finally {
+      setMemberPending(false);
+    }
+  }
+
+  async function changeParentEmail(member: ManagedMember) {
+    const email = (parentEmails[member.id] ?? member.email ?? "").trim();
+    if (!email) return;
+    setMemberPending(true);
+    setMemberStatus(null);
+    try {
+      await updateParentMember(member.id, { display_name: member.display_name, email, color: member.color, emoji: member.emoji });
+      setParentEmails((emails) => ({ ...emails, [member.id]: email }));
+      await load();
+      setMemberStatus(`E-Mail für ${member.display_name} geändert.`);
+    } catch {
+      setMemberStatus("E-Mail konnte nicht geändert werden. Prüfe, ob sie gültig und noch frei ist.");
     } finally {
       setMemberPending(false);
     }
@@ -352,9 +370,15 @@ export default function ManagePage() {
                   <span className="rounded-full px-2 py-1 text-xs font-bold" style={{ backgroundColor: `${member.color}1a`, color: member.color }}>{member.role === "PARENT" ? "Eltern" : "Kind"}</span>
                 </div>
                 {member.role === "PARENT" && (
-                  <div className="mt-4 flex flex-wrap gap-2">
-                    <input type="password" inputMode="numeric" pattern="[0-9]{6}" maxLength={6} placeholder="Neue 6-stellige PIN" value={newPins[member.id] ?? ""} onChange={(event) => setNewPins((pins) => ({ ...pins, [member.id]: event.target.value.replace(/\D/g, "") }))} className="input max-w-56 py-2" aria-label={`Neue PIN für ${member.display_name}`} />
-                    <button type="button" disabled={memberPending} onClick={() => void changeParentPin(member)} className="touch-action cursor-pointer rounded-xl px-3 py-2 text-sm font-bold text-white disabled:opacity-50" style={{ backgroundColor: "var(--color-primary)" }}>PIN ändern</button>
+                  <div className="mt-4 space-y-3">
+                    <div className="flex flex-wrap gap-2">
+                      <input type="email" value={parentEmails[member.id] ?? member.email ?? ""} onChange={(event) => setParentEmails((emails) => ({ ...emails, [member.id]: event.target.value }))} className="input min-w-56 flex-1 py-2" aria-label={`E-Mail für ${member.display_name}`} />
+                      <button type="button" disabled={memberPending} onClick={() => void changeParentEmail(member)} className="touch-action cursor-pointer rounded-xl px-3 py-2 text-sm font-bold text-white disabled:opacity-50" style={{ backgroundColor: "var(--color-primary)" }}>E-Mail speichern</button>
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      <input type="password" inputMode="numeric" pattern="[0-9]{6}" maxLength={6} placeholder="Neue 6-stellige PIN" value={newPins[member.id] ?? ""} onChange={(event) => setNewPins((pins) => ({ ...pins, [member.id]: event.target.value.replace(/\D/g, "") }))} className="input max-w-56 py-2" aria-label={`Neue PIN für ${member.display_name}`} />
+                      <button type="button" disabled={memberPending} onClick={() => void changeParentPin(member)} className="touch-action cursor-pointer rounded-xl px-3 py-2 text-sm font-bold text-white disabled:opacity-50" style={{ backgroundColor: "var(--color-primary)" }}>PIN ändern</button>
+                    </div>
                   </div>
                 )}
                 {member.role === "CHILD" && (
