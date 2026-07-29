@@ -31,7 +31,7 @@ jobs:
         run: rsync -a --delete --exclude .env "$GITHUB_WORKSPACE/" "$APP_DIR/"
 
       - name: Build and restart services
-        working-directory: /root/GC-Family
+        working-directory: ${{ env.APP_DIR }}
         run: docker compose --env-file .env up -d --build --remove-orphans
 
       - name: Verify service
