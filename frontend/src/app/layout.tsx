@@ -47,7 +47,7 @@ export default function RootLayout({
       <body className="min-h-full flex flex-col">
         <AnimatedShaderBackground />
         <div className="relative z-10 flex min-h-full flex-1 flex-col">
-          <AuthProvider><SoundFeedback /><div className="sticky top-0 z-40 grid min-h-15 grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-1 border-b px-2 shadow-sm sm:px-4" style={{ borderColor: "var(--color-border)", backgroundColor: "color-mix(in srgb, var(--color-background) 88%, transparent)", backdropFilter: "blur(16px)" }}><Link href="/" className="shrink-0 text-sm font-bold sm:text-base" style={{ color: "var(--color-primary)" }}>GC-Family</Link><MainNavigation /><ThemeToggle /></div><VersionBadge />{children}</AuthProvider>
+          <AuthProvider><SoundFeedback /><div className="sticky top-0 z-40 border-b shadow-sm" style={{ borderColor: "var(--color-border)", backgroundColor: "color-mix(in srgb, var(--color-background) 88%, transparent)", backdropFilter: "blur(16px)" }}><div className="grid min-h-15 grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-1 px-2 sm:px-4"><Link href="/" className="shrink-0 text-sm font-bold sm:text-base" style={{ color: "var(--color-primary)" }}>GC-Family</Link><MainNavigation /><ThemeToggle /></div><p className="pb-2 text-center text-xs font-bold" style={{ color: "var(--color-secondary)" }}>Unsere gemeinsame Woche</p></div><VersionBadge />{children}</AuthProvider>
         </div>
       </body>
     </html>
