@@ -20,7 +20,9 @@ jobs:
     env:
       APP_VERSION: ${{ github.ref_name }}
       COMPOSE_PROJECT_NAME: gc-family
-      APP_DIR: /root/GC-Family
+      # Der selbstgehostete Runner läuft als Nutzer `runner`; das Ziel muss
+      # daher außerhalb des nicht zugänglichen /root-Verzeichnisses liegen.
+      APP_DIR: /home/runner/GC-Family
     steps:
       - name: Checkout release tag
         uses: actions/checkout@v4
