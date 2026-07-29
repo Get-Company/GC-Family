@@ -101,7 +101,7 @@ export function TaskCard({
           {instance.title}
         </p>
         <p className="text-sm" style={{ opacity: 0.7 }}>
-          {instance.assigned_member_names.length > 0 ? instance.assigned_member_names.join(", ") : instance.assigned_member_name ?? "Niemand"}
+          {instance.assigned_member_names.length > 0 ? instance.assigned_member_names.join(", ") : instance.assigned_member_name ?? "Frei für dich"}
           {instance.points > 0 && (
             <span
               className="ml-2 rounded-full px-2 py-0.5 text-xs font-bold"

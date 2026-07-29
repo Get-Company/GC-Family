@@ -53,11 +53,14 @@ export default function Dashboard() {
   const visible = useMemo(() => {
     const activeFilter = activeChild?.id ?? filter;
     return instances.filter((instance) => {
-      const memberMatches = activeFilter === null || instance.assigned_member_ids.includes(activeFilter);
+      const isFree = instance.assigned_member_ids.length === 0 && instance.assigned_member_id === null;
+      const memberMatches = activeChild
+        ? isFree || instance.assigned_member_ids.includes(activeChild.id)
+        : activeFilter === null || instance.assigned_member_ids.includes(activeFilter);
       const statusMatches = statusFilter === "ALL" || (statusFilter === "DONE" ? instance.status === "DONE" : instance.status !== "DONE");
       return memberMatches && statusMatches;
     });
-  }, [activeChild?.id, filter, instances, statusFilter]);
+  }, [activeChild, filter, instances, statusFilter]);
   const rankedStats = useMemo(() => stats.filter((stat) => stat.points > 0).sort((a, b) => b.points - a.points || b.completed_tasks - a.completed_tasks), [stats]);
 
   async function handleComplete(id: number, share = false) {

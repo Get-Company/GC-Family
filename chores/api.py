@@ -320,8 +320,10 @@ def list_instances(
     qs = _with_instance_details(
         ChoreInstance.objects.filter(
             chore__household=auth.household,
-            due_date__gte=date_from,
             due_date__lte=date_to,
+        ).filter(
+            Q(active_until__gte=date_from)
+            | Q(active_until__isnull=True, due_date__gte=date_from)
         ).order_by("due_date", "chore__title")
     )
     if not auth.is_parent:
@@ -333,7 +335,9 @@ def list_instances(
         if date_to < week_start:
             return []
         qs = qs.filter(
-            Q(assigned_member_id=auth.member.id) | Q(assigned_members=auth.member),
+            Q(assigned_member_id=auth.member.id)
+            | Q(assigned_members=auth.member)
+            | Q(assigned_member__isnull=True, assigned_members__isnull=True),
             due_date__gte=week_start,
         ).distinct()
     elif member_id is not None:

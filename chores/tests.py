@@ -161,6 +161,45 @@ class ChoreAuthorizationTests(TestCase):
         self.assertEqual(skip.status_code, 403)
         self.assertEqual(filtered.status_code, 403)
 
+    def test_child_sees_own_and_unassigned_tasks_but_not_siblings_tasks(self):
+        free_chore = Chore.objects.create(
+            household=self.household,
+            title="Freie Aufgabe",
+            created_by=self.parent,
+        )
+        free_instance = ChoreInstance.objects.create(
+            chore=free_chore,
+            due_date=dt.date.today(),
+        )
+        sibling = FamilyMember.objects.create(
+            household=self.household,
+            display_name="Geschwister",
+            role=FamilyMember.Role.CHILD,
+        )
+        sibling_chore = Chore.objects.create(
+            household=self.household,
+            title="Nur für Geschwister",
+            default_assignee=sibling,
+            created_by=self.parent,
+        )
+        sibling_instance = ChoreInstance.objects.create(
+            chore=sibling_chore,
+            due_date=dt.date.today(),
+            assigned_member=sibling,
+        )
+        parent_tokens = self._parent_tokens()
+        child_token = self._child_token(parent_tokens["access"])
+        listed = self.client.get(
+            "/api/chores/instances",
+            HTTP_AUTHORIZATION=f"Bearer {child_token}",
+        )
+
+        self.assertEqual(listed.status_code, 200)
+        visible_ids = {item["id"] for item in listed.json()}
+        self.assertIn(self.instance.id, visible_ids)
+        self.assertIn(free_instance.id, visible_ids)
+        self.assertNotIn(sibling_instance.id, visible_ids)
+
     def test_stats_report_completed_points_and_streak_for_current_member(self):
         parent_tokens = self._parent_tokens()
         child_token = self._child_token(parent_tokens["access"])
