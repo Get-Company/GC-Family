@@ -77,7 +77,7 @@ export default function LoginPage() {
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.3, ease: EASE_OUT }}
         onSubmit={submit}
-        className="rounded-3xl border p-6 sm:p-8"
+        className="rounded-[20px] border p-6 sm:p-8"
         style={{ borderColor: "var(--color-border)", backgroundColor: "var(--color-background)" }}
       >
         <p className="text-sm font-bold uppercase tracking-wide" style={{ color: "var(--color-secondary)" }}>GC-Family</p>

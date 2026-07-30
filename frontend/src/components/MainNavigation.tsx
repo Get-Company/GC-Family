@@ -9,9 +9,9 @@ import { useAuth } from "@/lib/AuthProvider";
 import { useSound } from "@/lib/useSound";
 
 const items = [
-  { href: "/", label: "Übersicht", icon: HomeIcon, color: "#2563eb" },
-  { href: "/tasks", label: "Aufgaben", icon: TaskIcon, color: "#db2777" },
-  { href: "/scoreboard", label: "Punkte", icon: TrophyIcon, color: "#d97706" },
+  { href: "/", label: "Übersicht", icon: HomeIcon },
+  { href: "/tasks", label: "Aufgaben", icon: TaskIcon },
+  { href: "/scoreboard", label: "Punkte", icon: TrophyIcon },
 ];
 
 export function MainNavigation() {
@@ -25,7 +25,7 @@ export function MainNavigation() {
   const submitting = useRef(false);
   const currentMember = state.kind === "authenticated" ? state.me.member : null;
   const visibleItems = currentMember?.role === "PARENT"
-    ? [...items, { href: "/manage", label: "Verwalten", icon: ManageIcon, color: "#059669" }]
+    ? [...items, { href: "/manage", label: "Verwalten", icon: ManageIcon }]
     : items;
 
   async function login(pinValue: string) {
@@ -55,18 +55,20 @@ export function MainNavigation() {
     if (nextPin.length === 6) void login(nextPin);
   }
 
-  return <><nav aria-label="Hauptnavigation" className="mx-auto flex w-full max-w-xl items-stretch justify-center gap-1.5 px-3 py-2.5 sm:gap-2">
-    {visibleItems.map(({ href, label, icon: Icon, color }) => <NavItem key={href} href={href} label={label} active={pathname === href} color={color}><Icon /></NavItem>)}
-    {currentMember ? <NavItem href="/profile" label="Profil" active={pathname === "/profile"} color="#7c3aed"><ProfileIcon /></NavItem> : <NavButton label="Anmelden" color="#7c3aed" glow="#ddd6fe" onClick={() => { setError(null); setPin(""); setLoginOpen(true); }}><ProfileIcon /></NavButton>}
+  return <><nav aria-label="Hauptnavigation" className="fixed inset-x-0 bottom-0 z-50 flex items-stretch border-t px-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] pt-2 md:static md:mx-auto md:max-w-7xl md:justify-center md:border-t md:px-4 md:py-2" style={{ borderColor: "var(--color-border)", backgroundColor: "color-mix(in srgb, var(--color-background) 94%, transparent)", backdropFilter: "blur(16px)" }}>
+    <div className="flex w-full max-w-xl items-stretch justify-center gap-1 md:max-w-2xl md:gap-2">
+      {visibleItems.map(({ href, label, icon: Icon }) => <NavItem key={href} href={href} label={label} active={pathname === href}><Icon /></NavItem>)}
+      {currentMember ? <NavItem href="/profile" label="Profil" active={pathname === "/profile"}><ProfileIcon /></NavItem> : <NavButton label="Anmelden" onClick={() => { setError(null); setPin(""); setLoginOpen(true); }}><ProfileIcon /></NavButton>}
+    </div>
   </nav>{loginOpen && <PinLoginModal pin={pin} pending={pending} error={error} onClose={() => !pending && setLoginOpen(false)} onPinChange={updatePin} />}</>;
 }
 
-function NavItem({ href, label, active, color, children }: { href: string; label: string; active: boolean; color: string; children: React.ReactNode }) {
-  return <Link href={href} aria-current={active ? "page" : undefined} aria-label={label} title={label} className="group relative flex min-w-0 flex-1 flex-col items-center justify-center gap-1 rounded-2xl px-1 py-1.5 text-[11px] font-bold leading-none transition-all focus-visible:outline-none focus-visible:ring-2" style={{ color: active ? color : "var(--color-foreground)" }}><span className="flex h-11 w-11 items-center justify-center rounded-2xl border-2 shadow-sm transition-all duration-200 group-hover:-translate-y-1 group-hover:rotate-[-4deg]" style={{ borderColor: active ? color : `${color}45`, backgroundColor: active ? color : "var(--color-button-surface)", color: active ? "#ffffff" : color, boxShadow: active ? `0 6px 0 ${color}55` : "0 2px 0 rgba(15,23,42,0.08)" }}>{children}</span><span className="truncate">{label}</span>{active && <span className="absolute -bottom-0.5 h-1 w-6 rounded-full" style={{ backgroundColor: color }} />}</Link>;
+function NavItem({ href, label, active, children }: { href: string; label: string; active: boolean; children: React.ReactNode }) {
+  return <Link href={href} aria-current={active ? "page" : undefined} aria-label={label} className="relative flex min-h-14 min-w-0 flex-1 flex-col items-center justify-center gap-1 rounded-xl px-1 text-[11px] font-semibold leading-none focus-visible:outline-none focus-visible:ring-2 md:flex-row md:gap-2 md:px-3 md:text-sm" style={{ color: active ? "var(--color-primary)" : "var(--color-subtle-text)", backgroundColor: active ? "color-mix(in srgb, var(--color-primary) 10%, transparent)" : "transparent" }}><span className="flex h-6 w-6 items-center justify-center">{children}</span><span className="truncate">{label}</span>{active && <span className="absolute bottom-0 h-0.5 w-8 rounded-full md:bottom-1" style={{ backgroundColor: "var(--color-primary)" }} />}</Link>;
 }
 
-function NavButton({ label, color, glow, onClick, children }: { label: string; color: string; glow: string; onClick: () => void; children: React.ReactNode }) {
-  return <button type="button" onClick={onClick} aria-label={label} title={label} className="group flex min-w-0 flex-1 flex-col items-center justify-center gap-1 rounded-2xl px-1 py-1.5 text-[11px] font-bold leading-none transition-all focus-visible:outline-none focus-visible:ring-2" style={{ color: "var(--color-foreground)", background: `linear-gradient(135deg, ${glow}70, transparent)` }}><span className="flex h-11 w-11 items-center justify-center rounded-2xl border-2 shadow-sm transition-all duration-200 group-hover:-translate-y-1 group-hover:rotate-[4deg]" style={{ borderColor: `${color}55`, backgroundColor: "var(--color-button-surface)", color, boxShadow: "0 2px 0 rgba(15,23,42,0.08)" }}>{children}</span><span className="truncate">{label}</span></button>;
+function NavButton({ label, onClick, children }: { label: string; onClick: () => void; children: React.ReactNode }) {
+  return <button type="button" onClick={onClick} aria-label={label} className="flex min-h-14 min-w-0 flex-1 flex-col items-center justify-center gap-1 rounded-xl px-1 text-[11px] font-semibold leading-none focus-visible:outline-none focus-visible:ring-2 md:flex-row md:gap-2 md:px-3 md:text-sm" style={{ color: "var(--color-subtle-text)" }}><span className="flex h-6 w-6 items-center justify-center">{children}</span><span className="truncate">{label}</span></button>;
 }
 
 function PinLoginModal({ pin, pending, error, onClose, onPinChange }: { pin: string; pending: boolean; error: string | null; onClose: () => void; onPinChange: (pin: string) => void }) {

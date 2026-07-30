@@ -73,17 +73,17 @@ export function TaskCard({
         visible: { opacity: 1, y: 0 },
       }}
       transition={{ duration: 0.3, ease: EASE_OUT }}
-      className="relative flex items-center gap-4 overflow-hidden rounded-2xl border p-4"
+      className="relative flex items-center gap-3 overflow-hidden rounded-[18px] border p-3.5 sm:gap-4 sm:p-4"
       style={{
         borderColor: "var(--color-border)",
         background: done ? "var(--color-muted)" : "var(--color-background)",
-        boxShadow: "0 1px 2px rgba(0,0,0,0.05)",
+        boxShadow: "none",
       }}
     >
       {instance.image_url && <Image src={instance.image_url} alt="" fill sizes="(max-width: 768px) 100vw, 50vw" unoptimized className="pointer-events-none object-cover opacity-[0.10]" />}
       {/* Aufgaben-Icon (Emoji als Inhalt, nicht als UI-Icon) */}
       <div
-        className="relative z-10 flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-xl text-2xl"
+        className="relative z-10 flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-[14px] text-2xl"
         style={{ backgroundColor: `${instance.color}1a` }}
         aria-hidden
       >
@@ -154,7 +154,7 @@ export function TaskCard({
           aria-label={done ? canUndo ? `${instance.title}: meinen Anteil zurücknehmen` : "Aufgabe wieder öffnen" : partial ? "Wird gemeinsam erledigt" : `${instance.title} als erledigt markieren`}
           title={done ? canUndo ? "Zum Zurücknehmen erneut antippen" : "Zum Wiederöffnen erneut antippen" : "Als erledigt markieren"}
           whileTap={{ scale: 0.9 }}
-          className="relative flex h-12 w-12 cursor-pointer items-center justify-center rounded-full border-2 transition-colors disabled:cursor-default focus-visible:outline-none focus-visible:ring-2"
+          className="relative flex h-[52px] w-[52px] cursor-pointer items-center justify-center rounded-full border-2 transition-colors disabled:cursor-default focus-visible:outline-none focus-visible:ring-2"
           style={{
             borderColor: done ? "var(--color-secondary)" : "var(--color-border)",
             backgroundColor: done ? "var(--color-secondary)" : "transparent",
@@ -186,7 +186,7 @@ export function TaskCard({
           </AnimatePresence>
         </motion.button>
         {!done && onShare && !readOnly && (
-          <button type="button" onClick={() => onShare(instance.id)} className="touch-action inline-flex min-h-11 items-center justify-center gap-1.5 cursor-pointer rounded-xl border px-3 py-2 text-xs font-bold transition-all hover:-translate-y-0.5 focus-visible:outline-none focus-visible:ring-2" style={{ color: "var(--color-accent)", borderColor: "var(--color-accent)", backgroundColor: "color-mix(in srgb, var(--color-accent) 10%, transparent)" }}>
+          <button type="button" onClick={() => onShare(instance.id)} className="touch-action inline-flex min-h-11 items-center justify-center gap-1.5 cursor-pointer rounded-xl border px-3 py-2 text-xs font-bold transition-all focus-visible:outline-none focus-visible:ring-2" style={{ color: "var(--color-accent)", borderColor: "var(--color-accent)", backgroundColor: "color-mix(in srgb, var(--color-accent) 10%, transparent)" }}>
             <ShareIcon />
             {partial ? "½ übernehmen" : "Teilen (½)"}
           </button>

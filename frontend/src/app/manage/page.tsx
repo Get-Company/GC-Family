@@ -39,6 +39,8 @@ type FormValues = {
   endDate: string;
 };
 
+type ManageSection = "CHORES" | "MEMBERS";
+
 function emptyForm(): FormValues {
   const today = new Date().toISOString().slice(0, 10);
   return {
@@ -93,6 +95,7 @@ export default function ManagePage() {
   const [parentEmails, setParentEmails] = useState<Record<number, string>>({});
   const [jingles, setJingles] = useState<Record<number, { completion: string; undo: string }>>({});
   const [taskImage, setTaskImage] = useState<File | null>(null);
+  const [section, setSection] = useState<ManageSection>("CHORES");
   const isParent =
     authState.kind === "authenticated" && authState.me.member.role === "PARENT";
 
@@ -307,38 +310,38 @@ export default function ManagePage() {
   }
 
   return (
-    <main className="mx-auto w-full max-w-6xl flex-1 px-4 py-8 sm:px-6">
-      <header className="mb-8 flex flex-wrap items-center justify-between gap-4">
+    <main className="mx-auto w-full max-w-7xl flex-1 px-4 py-6 sm:px-6 sm:py-8">
+      <header className="mb-5 flex flex-wrap items-center justify-between gap-4">
         <div>
           <p className="text-sm font-bold uppercase tracking-wide" style={{ color: "var(--color-secondary)" }}>Elternbereich</p>
-          <h1 className="text-4xl font-bold">Aufgaben verwalten</h1>
+          <h1 className="text-4xl font-bold">Verwalten</h1>
         </div>
         <Link href="/" className="cursor-pointer rounded-xl border px-4 py-2 font-bold transition-colors hover:bg-[var(--color-muted)] focus-visible:outline-none focus-visible:ring-2" style={{ borderColor: "var(--color-border)" }}>
           Zum Dashboard
         </Link>
       </header>
-      <div className="grid gap-8 lg:grid-cols-[1.15fr_0.85fr]">
+      <div className="mb-6 grid grid-cols-2 gap-2 rounded-2xl border p-1.5" style={{ borderColor: "var(--color-border)", backgroundColor: "color-mix(in srgb, var(--color-muted) 76%, transparent)" }}>
+        <ManageTab active={section === "CHORES"} label="Aufgaben" onClick={() => setSection("CHORES")} />
+        <ManageTab active={section === "MEMBERS"} label="Mitglieder verwalten" onClick={() => setSection("MEMBERS")} />
+      </div>
+      {section === "CHORES" && <div className="grid gap-5 md:grid-cols-[minmax(15rem,0.76fr)_minmax(0,1.24fr)] md:items-start">
         <section>
-          <h2 className="text-2xl font-bold">Bestehende Aufgaben</h2>
-          <ul className="mt-4 space-y-3">
+          <div className="mb-3 flex items-center justify-between gap-3"><h2 className="text-2xl font-bold">Bestehende Aufgaben</h2><button type="button" onClick={() => { setEditingId(null); setTaskImage(null); setForm(emptyForm()); setStatus(null); }} className="touch-action cursor-pointer rounded-xl px-3 py-2 text-sm font-bold text-white" style={{ backgroundColor: "var(--color-primary)" }}>+ Neu</button></div>
+          <ul className="space-y-3 md:max-h-[calc(100vh-17rem)] md:overflow-y-auto md:pr-2">
             {chores.map((chore) => (
-              <li key={chore.id} className="flex items-center justify-between gap-3 rounded-2xl border p-4" style={{ borderColor: "var(--color-border)" }}>
-                <button type="button" className="min-w-0 cursor-pointer text-left focus-visible:outline-none focus-visible:ring-2" onClick={() => { setEditingId(chore.id); setTaskImage(null); setForm(formForChore(chore)); }}>
+              <li key={chore.id} className="rounded-2xl border p-3" style={{ borderColor: editingId === chore.id ? chore.color : "var(--color-border)", backgroundColor: editingId === chore.id ? `${chore.color}0d` : "var(--color-background)" }}>
+                <button type="button" className="w-full min-w-0 cursor-pointer text-left focus-visible:outline-none focus-visible:ring-2" onClick={() => { setEditingId(chore.id); setTaskImage(null); setForm(formForChore(chore)); setStatus(null); }}>
                   <span className="block truncate text-lg font-bold">{chore.image_url ? <Image src={chore.image_url} alt="" width={32} height={32} unoptimized className="mr-2 inline-block h-8 w-8 rounded-lg object-cover align-middle" /> : chore.icon && <span aria-hidden>{chore.icon} </span>}{chore.title}</span>
                   <span className="text-sm" style={{ opacity: 0.7 }}>{chore.is_recurring ? `${chore.recurrence?.frequency === "DAILY" ? "Täglich" : chore.recurrence?.frequency === "MONTHLY" ? "Monatlich" : chore.recurrence?.interval === 2 ? "Alle 2 Wochen" : "Wöchentlich"} · feste Zuweisung` : `Am ${chore.due_date}`}</span>
                   <span className="mt-2 flex flex-wrap gap-1.5">{assigneesForChore(editingId === chore.id ? form.assigneeIds : chore.default_assignee_ids.map(String), members).length > 0 ? assigneesForChore(editingId === chore.id ? form.assigneeIds : chore.default_assignee_ids.map(String), members).map((member) => <span key={member.id} className="rounded-full px-2 py-1 text-xs font-bold" style={{ backgroundColor: `${member.color}1a`, color: member.color }}>{member.emoji} {member.display_name}</span>) : <span className="text-xs" style={{ opacity: 0.65 }}>Keine feste Zuweisung</span>}</span>
                 </button>
-                <div className="flex shrink-0 flex-col gap-2">
-                  <button type="button" aria-label={`${chore.title} kopieren`} className="touch-action inline-flex cursor-pointer items-center gap-2 rounded-xl border px-3 py-2 text-sm font-bold focus-visible:outline-none focus-visible:ring-2" onClick={() => { setEditingId(null); setTaskImage(null); setForm({ ...formForChore(chore), title: `${chore.title} (Kopie)` }); setStatus("Kopie vorbereitet – anpassen und speichern."); }} style={{ color: "var(--color-primary)", borderColor: "var(--color-primary)" }}><CopyIcon />Kopieren</button>
-                  <button type="button" aria-label={`${chore.title} löschen`} className="touch-action inline-flex cursor-pointer items-center gap-2 rounded-xl border px-3 py-2 text-sm font-bold focus-visible:outline-none focus-visible:ring-2" onClick={() => void remove(chore)} style={{ color: "var(--color-destructive)", borderColor: "var(--color-destructive)" }}><TrashIcon />Löschen</button>
-                </div>
               </li>
             ))}
           </ul>
           {chores.length === 0 && <p className="mt-4" style={{ opacity: 0.7 }}>Noch keine Aufgaben angelegt.</p>}
         </section>
-        <section className="rounded-3xl border p-5 sm:p-6" style={{ borderColor: "var(--color-border)", backgroundColor: "var(--color-background)" }}>
-          <h2 className="text-2xl font-bold">{editingId === null ? "Neue Aufgabe" : "Aufgabe bearbeiten"}</h2>
+        <section className="rounded-[20px] border p-5 sm:p-6 md:sticky md:top-4" style={{ borderColor: "var(--color-border)", backgroundColor: "var(--color-background)" }}>
+          <div className="flex flex-wrap items-center justify-between gap-3"><h2 className="text-2xl font-bold">{editingId === null ? "Neue Aufgabe" : "Aufgabe bearbeiten"}</h2>{editingId !== null && <div className="flex gap-2"><button type="button" aria-label="Aufgabe kopieren" className="touch-action inline-flex cursor-pointer items-center gap-2 rounded-xl border px-3 py-2 text-sm font-bold focus-visible:outline-none focus-visible:ring-2" onClick={() => { const chore = chores.find((item) => item.id === editingId); if (chore) { setEditingId(null); setTaskImage(null); setForm({ ...formForChore(chore), title: `${chore.title} (Kopie)` }); setStatus("Kopie vorbereitet – anpassen und speichern."); } }} style={{ color: "var(--color-primary)", borderColor: "var(--color-primary)" }}><CopyIcon />Kopieren</button><button type="button" aria-label="Aufgabe löschen" className="touch-action inline-flex cursor-pointer items-center gap-2 rounded-xl border px-3 py-2 text-sm font-bold focus-visible:outline-none focus-visible:ring-2" onClick={() => { const chore = chores.find((item) => item.id === editingId); if (chore) void remove(chore); }} style={{ color: "var(--color-destructive)", borderColor: "var(--color-destructive)" }}><TrashIcon />Löschen</button></div>}</div>
           <form className="mt-4 space-y-4" onSubmit={submit}>
             <Field label="Titel"><input required value={form.title} onChange={(event) => update("title", event.target.value)} className="input" /></Field>
             <Field label="Beschreibung"><textarea value={form.description} onChange={(event) => update("description", event.target.value)} className="input min-h-20" /></Field>
@@ -351,15 +354,15 @@ export default function ManagePage() {
             <div className="flex gap-3"><button type="submit" disabled={pending} className="touch-action inline-flex cursor-pointer items-center gap-2 rounded-xl px-4 py-3 font-bold text-white disabled:opacity-50" style={{ backgroundColor: "var(--color-accent)" }}><SaveIcon />{pending ? "Speichert…" : "Speichern"}</button>{editingId !== null && <button type="button" onClick={() => { setEditingId(null); setTaskImage(null); setForm(emptyForm()); }} className="touch-action inline-flex cursor-pointer items-center gap-2 rounded-xl border px-4 py-3 font-bold" style={{ borderColor: "var(--color-border)" }}><CancelIcon />Abbrechen</button>}</div>
           </form>
         </section>
-      </div>
-      <section className="mt-10 border-t pt-8" style={{ borderColor: "var(--color-border)" }}>
+      </div>}
+      {section === "MEMBERS" && <section style={{ borderColor: "var(--color-border)" }}>
         <div className="mb-5">
           <p className="text-sm font-bold uppercase tracking-wide" style={{ color: "var(--color-secondary)" }}>Familie</p>
           <h2 className="text-2xl font-bold">Mitglieder verwalten</h2>
           <p className="mt-1 text-sm" style={{ opacity: 0.7 }}>Eltern erhalten einen eigenen Login; Kinder melden sich über ihr Profil und eine PIN an.</p>
         </div>
-        <div className="grid gap-6 lg:grid-cols-[1.1fr_0.9fr]">
-          <div className="space-y-3">
+        <div className="grid gap-5 md:grid-cols-[minmax(15rem,0.76fr)_minmax(0,1.24fr)] md:items-start">
+          <div className="space-y-3 md:max-h-[calc(100vh-17rem)] md:overflow-y-auto md:pr-2">
             {managedMembers.map((member) => (
               <article key={member.id} className="rounded-2xl border p-4" style={{ borderColor: "var(--color-border)" }}>
                 <div className="flex items-start justify-between gap-3">
@@ -407,7 +410,7 @@ export default function ManagePage() {
               </article>
             ))}
           </div>
-          <div className="grid content-start gap-5">
+          <div className="grid content-start gap-5 md:sticky md:top-4">
             <form onSubmit={addParent} className="rounded-2xl border p-5" style={{ borderColor: "var(--color-border)" }}>
               <h3 className="text-xl font-bold">Elternteil hinzufügen</h3>
               <div className="mt-3 space-y-3">
@@ -428,13 +431,17 @@ export default function ManagePage() {
             {memberStatus && <p className="text-sm font-semibold" style={{ color: memberStatus.includes("konnte") ? "var(--color-destructive)" : "var(--color-secondary)" }}>{memberStatus}</p>}
           </div>
         </div>
-      </section>
+      </section>}
     </main>
   );
 }
 
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return <label className="block text-sm font-bold"><span className="mb-1 block">{label}</span>{children}</label>;
+}
+
+function ManageTab({ active, label, onClick }: { active: boolean; label: string; onClick: () => void }) {
+  return <button type="button" onClick={onClick} aria-pressed={active} className="touch-action cursor-pointer rounded-xl px-3 py-3 text-sm font-bold transition-all focus-visible:outline-none focus-visible:ring-2" style={{ backgroundColor: active ? "var(--color-background)" : "transparent", color: active ? "var(--color-primary)" : "var(--color-foreground)", boxShadow: active ? "0 2px 8px rgba(15,23,42,0.08)" : "none" }}>{label}</button>;
 }
 
 function CopyIcon() {
