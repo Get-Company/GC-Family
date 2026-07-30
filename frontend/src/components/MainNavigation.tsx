@@ -9,9 +9,9 @@ import { useAuth } from "@/lib/AuthProvider";
 import { useSound } from "@/lib/useSound";
 
 const items = [
-  { href: "/", label: "Übersicht", icon: HomeIcon, color: "#2563eb", glow: "#bfdbfe" },
-  { href: "/tasks", label: "Aufgaben", icon: TaskIcon, color: "#db2777", glow: "#fbcfe8" },
-  { href: "/scoreboard", label: "Punkte", icon: TrophyIcon, color: "#d97706", glow: "#fde68a" },
+  { href: "/", label: "Übersicht", icon: HomeIcon, color: "#2563eb" },
+  { href: "/tasks", label: "Aufgaben", icon: TaskIcon, color: "#db2777" },
+  { href: "/scoreboard", label: "Punkte", icon: TrophyIcon, color: "#d97706" },
 ];
 
 export function MainNavigation() {
@@ -24,6 +24,9 @@ export function MainNavigation() {
   const [error, setError] = useState<string | null>(null);
   const submitting = useRef(false);
   const currentMember = state.kind === "authenticated" ? state.me.member : null;
+  const visibleItems = currentMember?.role === "PARENT"
+    ? [...items, { href: "/manage", label: "Verwalten", icon: ManageIcon, color: "#059669" }]
+    : items;
 
   async function login(pinValue: string) {
     if (pinValue.length !== 6 || submitting.current) return;
@@ -53,13 +56,13 @@ export function MainNavigation() {
   }
 
   return <><nav aria-label="Hauptnavigation" className="mx-auto flex w-full max-w-xl items-stretch justify-center gap-1.5 px-3 py-2.5 sm:gap-2">
-    {items.map(({ href, label, icon: Icon, color, glow }) => <NavItem key={href} href={href} label={label} active={pathname === href} color={color} glow={glow}><Icon /></NavItem>)}
-    {currentMember ? <NavItem href="/profile" label="Profil" active={pathname === "/profile"} color="#7c3aed" glow="#ddd6fe"><ProfileIcon /></NavItem> : <NavButton label="Anmelden" color="#7c3aed" glow="#ddd6fe" onClick={() => { setError(null); setPin(""); setLoginOpen(true); }}><ProfileIcon /></NavButton>}
+    {visibleItems.map(({ href, label, icon: Icon, color }) => <NavItem key={href} href={href} label={label} active={pathname === href} color={color}><Icon /></NavItem>)}
+    {currentMember ? <NavItem href="/profile" label="Profil" active={pathname === "/profile"} color="#7c3aed"><ProfileIcon /></NavItem> : <NavButton label="Anmelden" color="#7c3aed" glow="#ddd6fe" onClick={() => { setError(null); setPin(""); setLoginOpen(true); }}><ProfileIcon /></NavButton>}
   </nav>{loginOpen && <PinLoginModal pin={pin} pending={pending} error={error} onClose={() => !pending && setLoginOpen(false)} onPinChange={updatePin} />}</>;
 }
 
-function NavItem({ href, label, active, color, glow, children }: { href: string; label: string; active: boolean; color: string; glow: string; children: React.ReactNode }) {
-  return <Link href={href} aria-current={active ? "page" : undefined} aria-label={label} title={label} className="group relative flex min-w-0 flex-1 flex-col items-center justify-center gap-1 rounded-2xl px-1 py-1.5 text-[11px] font-bold leading-none transition-all focus-visible:outline-none focus-visible:ring-2" style={{ color: active ? color : "var(--color-foreground)", background: active ? `linear-gradient(135deg, ${glow}cc, ${color}16)` : "transparent", boxShadow: active ? `inset 0 0 0 1px ${color}35, 0 7px 18px ${color}20` : "none" }}><span className="flex h-11 w-11 items-center justify-center rounded-2xl border-2 shadow-sm transition-all duration-200 group-hover:-translate-y-1 group-hover:rotate-[-4deg]" style={{ borderColor: active ? color : `${color}45`, backgroundColor: active ? color : "var(--color-button-surface)", color: active ? "#ffffff" : color, boxShadow: active ? `0 6px 0 ${color}55` : "0 2px 0 rgba(15,23,42,0.08)" }}>{children}</span><span className="truncate">{label}</span>{active && <span className="absolute -bottom-0.5 h-1 w-6 rounded-full" style={{ backgroundColor: color }} />}</Link>;
+function NavItem({ href, label, active, color, children }: { href: string; label: string; active: boolean; color: string; children: React.ReactNode }) {
+  return <Link href={href} aria-current={active ? "page" : undefined} aria-label={label} title={label} className="group relative flex min-w-0 flex-1 flex-col items-center justify-center gap-1 rounded-2xl px-1 py-1.5 text-[11px] font-bold leading-none transition-all focus-visible:outline-none focus-visible:ring-2" style={{ color: active ? color : "var(--color-foreground)" }}><span className="flex h-11 w-11 items-center justify-center rounded-2xl border-2 shadow-sm transition-all duration-200 group-hover:-translate-y-1 group-hover:rotate-[-4deg]" style={{ borderColor: active ? color : `${color}45`, backgroundColor: active ? color : "var(--color-button-surface)", color: active ? "#ffffff" : color, boxShadow: active ? `0 6px 0 ${color}55` : "0 2px 0 rgba(15,23,42,0.08)" }}>{children}</span><span className="truncate">{label}</span>{active && <span className="absolute -bottom-0.5 h-1 w-6 rounded-full" style={{ backgroundColor: color }} />}</Link>;
 }
 
 function NavButton({ label, color, glow, onClick, children }: { label: string; color: string; glow: string; onClick: () => void; children: React.ReactNode }) {
@@ -77,4 +80,5 @@ function PinLoginModal({ pin, pending, error, onClose, onPinChange }: { pin: str
 function HomeIcon() { return <svg aria-hidden="true" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="m3 10 9-7 9 7" /><path d="M5 9v11h14V9" /><path d="M9 20v-6h6v6" /></svg>; }
 function TaskIcon() { return <svg aria-hidden="true" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><rect x="4" y="3" width="16" height="18" rx="2" /><path d="m8 9 1.5 1.5L12 7.5M13.5 10h2.5M8 15l1.5 1.5 2.5-3M13.5 16h2.5" /></svg>; }
 function TrophyIcon() { return <svg aria-hidden="true" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M8 4h8v5a4 4 0 0 1-8 0V4Z" /><path d="M8 6H5v1a4 4 0 0 0 4 4M16 6h3v1a4 4 0 0 1-4 4M12 13v4M8 21h8M9 17h6" /></svg>; }
+function ManageIcon() { return <svg aria-hidden="true" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M18.4 5.6l-2.1 2.1M7.7 16.3l-2.1 2.1" /><circle cx="12" cy="12" r="4" /></svg>; }
 function ProfileIcon() { return <svg aria-hidden="true" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="8" r="4" /><path d="M4 21a8 8 0 0 1 16 0" /></svg>; }
