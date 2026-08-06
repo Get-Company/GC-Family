@@ -384,6 +384,36 @@ class ChoreAuthorizationTests(TestCase):
         self.assertEqual(created.json()["end_date"], end.isoformat())
         self.assertEqual(task["active_until"], end.isoformat())
 
+    def test_public_dashboard_only_lists_tasks_available_today(self):
+        today = dt.date.today()
+        active_chore = Chore.objects.create(
+            household=self.household,
+            title="Diese Woche möglich",
+            created_by=self.parent,
+        )
+        active_instance = ChoreInstance.objects.create(
+            chore=active_chore,
+            due_date=today - dt.timedelta(days=1),
+            active_until=today + dt.timedelta(days=1),
+        )
+        future_chore = Chore.objects.create(
+            household=self.household,
+            title="Erst morgen möglich",
+            created_by=self.parent,
+        )
+        future_instance = ChoreInstance.objects.create(
+            chore=future_chore,
+            due_date=today + dt.timedelta(days=1),
+        )
+
+        dashboard = self.client.get("/api/public/dashboard")
+        instance_ids = {item["id"] for item in dashboard.json()["instances"]}
+
+        self.assertEqual(dashboard.status_code, 200)
+        self.assertIn(self.instance.id, instance_ids)
+        self.assertIn(active_instance.id, instance_ids)
+        self.assertNotIn(future_instance.id, instance_ids)
+
     def test_task_can_be_assigned_to_multiple_children(self):
         sibling = FamilyMember.objects.create(
             household=self.household,

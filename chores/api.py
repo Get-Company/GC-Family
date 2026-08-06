@@ -279,18 +279,19 @@ def _weekly_stats(household, date_from: dt.date, date_to: dt.date):
 
 @public_router.get("/dashboard", response=PublicDashboardOut)
 def public_dashboard(request):
-    """Öffentliche Familienansicht für die laufende Sonntag-bis-Samstag-Woche."""
+    """Öffentliche Familienansicht mit allen heute verfügbaren Aufgaben."""
     date_from, date_to = _week_bounds()
+    today = dt.date.today()
     household = Household.objects.order_by("id").first()
     if household is None:
         return {"members": [], "instances": [], "stats": []}
     instances = _with_instance_details(
         ChoreInstance.objects.filter(
             chore__household=household,
-            due_date__lte=date_to,
+            due_date__lte=today,
         ).filter(
-            Q(active_until__gte=date_from)
-            | Q(active_until__isnull=True, due_date__gte=date_from)
+            Q(active_until__gte=today)
+            | Q(active_until__isnull=True, due_date=today)
         ).order_by("due_date", "chore__title")
     )
     return {
