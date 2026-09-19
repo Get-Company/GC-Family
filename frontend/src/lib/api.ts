@@ -106,6 +106,7 @@ export type Stats = components["schemas"]["StatsOut"];
 export type PublicDashboard = components["schemas"]["PublicDashboardOut"];
 export type MemberWeeklyStats = components["schemas"]["MemberWeeklyStatsOut"];
 export type BoardTask = components["schemas"]["BoardTaskOut"];
+export type ChoreCompletion = components["schemas"]["ChoreCompletionOut"];
 export type ScoreboardData = components["schemas"]["ScoreboardOut"];
 export type Reminder = components["schemas"]["ReminderOut"];
 export type ReminderInput = components["schemas"]["ReminderIn"];
@@ -128,6 +129,12 @@ export const reopenInstance = (id: number) =>
 
 export const uncompleteInstance = (id: number) =>
   apiPost<Instance>(`/chores/instances/${id}/uncomplete`);
+
+export const completeAlwaysAvailableChore = (id: number) =>
+  apiPost<ChoreCompletion>(`/chores/${id}/complete`);
+
+export const undoAlwaysAvailableCompletion = (id: number) =>
+  apiPost<void>(`/chores/always-available-completions/${id}/undo`);
 
 export const loginParent = (email: string, password: string) =>
   apiPost<TokenPair>("/auth/login", { email, password }, { token: null });

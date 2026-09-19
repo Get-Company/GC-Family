@@ -32,7 +32,7 @@ jobs:
 
       - name: Build and restart services
         working-directory: ${{ env.APP_DIR }}
-        run: docker compose --env-file .env up -d --build --remove-orphans
+        run: APP_VERSION="${{ github.ref_name }}" docker compose --env-file .env up -d --build --remove-orphans
 
       - name: Verify service
         run: |

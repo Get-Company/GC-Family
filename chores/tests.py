@@ -223,6 +223,48 @@ class ChoreAuthorizationTests(TestCase):
         self.assertEqual(completed.json()["status"], ChoreInstance.Status.DONE)
         self.assertEqual(dashboard.status_code, 200)
 
+    def test_always_available_task_can_be_completed_repeatedly_and_scores_each_time(self):
+        parent_tokens = self._parent_tokens()
+        created = self._post(
+            "/api/chores",
+            {
+                "title": "Küche aufräumen",
+                "points": 3,
+                "is_always_available": True,
+                "default_assignee_ids": [self.child.id],
+            },
+            parent_tokens["access"],
+        )
+        child_token = self._child_token(parent_tokens["access"])
+        first = self._post(
+            f"/api/chores/{created.json()['id']}/complete", {}, child_token
+        )
+        second = self._post(
+            f"/api/chores/{created.json()['id']}/complete", {}, child_token
+        )
+        dashboard = self.client.get(
+            "/api/chores/dashboard",
+            HTTP_AUTHORIZATION=f"Bearer {child_token}",
+        )
+        task = next(item for item in dashboard.json()["tasks"] if item["id"] == created.json()["id"])
+        stats = next(item for item in dashboard.json()["stats"] if item["member_id"] == self.child.id)
+        undone = self._post(
+            f"/api/chores/always-available-completions/{second.json()['id']}/undo",
+            {},
+            child_token,
+        )
+
+        self.assertEqual(created.status_code, 200)
+        self.assertTrue(created.json()["is_always_available"])
+        self.assertEqual(first.status_code, 200)
+        self.assertEqual(second.status_code, 200)
+        self.assertTrue(task["available"])
+        self.assertIsNone(task["instance"])
+        self.assertEqual(task["completion_count_today"], 2)
+        self.assertEqual(task["latest_always_available_completion"]["member_id"], self.child.id)
+        self.assertEqual(stats["points"], 6.0)
+        self.assertEqual(undone.status_code, 204)
+
     def test_daily_recurrence_keeps_completed_history_and_creates_a_fresh_day(self):
         today = dt.date.today()
         chore = Chore.objects.create(

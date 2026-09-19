@@ -24,6 +24,9 @@ def message_for(reminder: Reminder, today: dt.date) -> str | None:
             continue
         if reminder.kind == Reminder.Kind.CHORE and task["id"] != reminder.chore_id:
             continue
+        if task["is_always_available"]:
+            relevant.append(task["title"])
+            continue
         instance = task["instance"]
         contributions = list(instance.contributions.all())
         if any(item.member_id == reminder.member_id for item in contributions):

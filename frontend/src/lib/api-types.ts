@@ -355,6 +355,46 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/chores/{chore_id}/complete": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Complete Always Available Chore
+         * @description Speichert eine weitere Erledigung einer dauerhaft verfügbaren Aufgabe.
+         */
+        post: operations["chores_api_complete_always_available_chore"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/chores/always-available-completions/{completion_id}/undo": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Undo Always Available Completion
+         * @description Nimmt die jüngste eigene Erledigung zurück; Eltern dürfen jede löschen.
+         */
+        post: operations["chores_api_undo_always_available_completion"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/chores/instances/{instance_id}/complete": {
         parameters: {
             query?: never;
@@ -832,12 +872,35 @@ export interface components {
             assigned_member_names: string[];
             /** Assigned Members */
             assigned_members: components["schemas"]["PublicMemberOut"][];
+            /** Is Always Available */
+            is_always_available: boolean;
+            /** Completion Count Today */
+            completion_count_today: number;
+            latest_always_available_completion: components["schemas"]["ChoreCompletionOut"] | null;
             /** Available */
             available: boolean;
             /** Next Available On */
             next_available_on: string | null;
             instance: components["schemas"]["InstanceOut"] | null;
             last_completion: components["schemas"]["InstanceOut"] | null;
+        };
+        /** ChoreCompletionOut */
+        ChoreCompletionOut: {
+            /** Id */
+            id: number;
+            /** Chore Id */
+            chore_id: number;
+            /** Member Id */
+            member_id: number;
+            /** Member Name */
+            member_name: string;
+            /** Member Emoji */
+            member_emoji: string;
+            /**
+             * Completed At
+             * Format: date-time
+             */
+            completed_at: string;
         };
         /** ContributionOut */
         ContributionOut: {
@@ -983,6 +1046,8 @@ export interface components {
             points: number;
             /** Is Recurring */
             is_recurring: boolean;
+            /** Is Always Available */
+            is_always_available: boolean;
             /** Default Assignee Id */
             default_assignee_id: number | null;
             /** Default Assignee Ids */
@@ -1046,6 +1111,11 @@ export interface components {
              * @default false
              */
             is_recurring: boolean;
+            /**
+             * Is Always Available
+             * @default false
+             */
+            is_always_available: boolean;
             /** Default Assignee Id */
             default_assignee_id?: number | null;
             /**
@@ -1576,6 +1646,48 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["StatsOut"];
                 };
+            };
+        };
+    };
+    chores_api_complete_always_available_chore: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                chore_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ChoreCompletionOut"];
+                };
+            };
+        };
+    };
+    chores_api_undo_always_available_completion: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                completion_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No Content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };

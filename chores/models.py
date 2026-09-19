@@ -10,6 +10,8 @@ class Chore(models.Model):
       zugehöriger `RecurrenceRule`.
     - Einzelaufgabe (z. B. Wertstoffhof, Papier): `is_recurring=False`,
       genau eine `ChoreInstance` an einem Datum.
+    - Immer verfügbar (z. B. Küche aufräumen): jede Erledigung wird separat
+      als `ChoreCompletion` gespeichert und die Aufgabe bleibt aktiv.
     """
 
     household = models.ForeignKey(
@@ -28,6 +30,10 @@ class Chore(models.Model):
     )
     points = models.PositiveIntegerField(default=0)
     is_recurring = models.BooleanField(default=False)
+    is_always_available = models.BooleanField(
+        default=False,
+        help_text="Bleibt nach jeder Erledigung aktiv und kann mehrfach am Tag zählen.",
+    )
     default_assignee = models.ForeignKey(
         FamilyMember,
         on_delete=models.SET_NULL,
@@ -184,3 +190,25 @@ class ChoreContribution(models.Model):
 
     def __str__(self):
         return f"{self.member.display_name}: {self.share} von {self.instance}"
+
+
+class ChoreCompletion(models.Model):
+    """Eine einzelne Erledigung einer immer verfügbaren Aufgabe."""
+
+    chore = models.ForeignKey(
+        Chore,
+        on_delete=models.CASCADE,
+        related_name="always_available_completions",
+    )
+    member = models.ForeignKey(
+        FamilyMember,
+        on_delete=models.CASCADE,
+        related_name="always_available_completions",
+    )
+    completed_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-completed_at"]
+
+    def __str__(self):
+        return f"{self.chore.title}: {self.member.display_name} @ {self.completed_at:%Y-%m-%d %H:%M}"

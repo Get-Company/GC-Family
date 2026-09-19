@@ -7,7 +7,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { PinLogin } from "@/components/PinLogin";
 import { TaskTile } from "@/components/TaskTile";
 import { Scoreboard } from "@/components/Scoreboard";
-import { ApiError, completeInstance, getDashboard, getPublicDashboard, reopenInstance, uncompleteInstance, updateOwnChildPin, type BoardTask, type Me, type PublicDashboard } from "@/lib/api";
+import { ApiError, completeAlwaysAvailableChore, completeInstance, getDashboard, getPublicDashboard, reopenInstance, undoAlwaysAvailableCompletion, uncompleteInstance, updateOwnChildPin, type BoardTask, type Me, type PublicDashboard } from "@/lib/api";
 import { useAuth } from "@/lib/AuthProvider";
 import { useSound } from "@/lib/useSound";
 import { randomInspiration } from "@/lib/inspirations";
@@ -50,14 +50,29 @@ export default function Dashboard() {
     return () => { invalidateRequests(); window.clearTimeout(timeout); window.clearInterval(interval); window.removeEventListener("focus", refresh); document.removeEventListener("visibilitychange", refresh); };
   }, [authState.kind, loadDashboard, invalidateRequests]);
 
-  async function handleAction(task: BoardTask, action: "complete" | "share" | "undo" | "reopen") {
-    if (!task.instance || !currentMember || actionPending.current) return;
+  async function handleAction(task: BoardTask, action: "complete" | "share" | "undo" | "reopen" | "always_complete" | "always_undo") {
+    if ((!task.instance && !task.is_always_available) || !currentMember || actionPending.current) return;
     actionPending.current = true;
     setPendingId(task.id);
     setError(null);
     // Ein älterer Leseabruf darf den neuen Abschluss nicht überschreiben.
     requestId.current++;
     try {
+      if (action === "always_complete") {
+        const completion = await completeAlwaysAvailableChore(task.id);
+        setDashboard((current) => current ? { ...current, tasks: current.tasks.map((item) => item.id === task.id ? { ...item, completion_count_today: item.completion_count_today + 1, latest_always_available_completion: completion } : item) } : current);
+        playJingle(currentMember.completion_jingle);
+        void loadDashboard().catch(() => {});
+        return;
+      }
+      if (action === "always_undo") {
+        if (!task.latest_always_available_completion) return;
+        await undoAlwaysAvailableCompletion(task.latest_always_available_completion.id);
+        playJingle(currentMember.undo_jingle);
+        void loadDashboard().catch(() => {});
+        return;
+      }
+      if (!task.instance) return;
       const instance = action === "undo" ? await uncompleteInstance(task.instance.id)
         : action === "reopen" ? await reopenInstance(task.instance.id)
         : await completeInstance(task.instance.id, currentMember.id, action === "share");

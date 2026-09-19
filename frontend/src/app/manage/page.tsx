@@ -35,6 +35,7 @@ type FormValues = {
   points: string;
   assigneeIds: string[];
   recurring: boolean;
+  alwaysAvailable: boolean;
   frequency: string;
   interval: string;
   startDate: string;
@@ -54,6 +55,7 @@ function emptyForm(): FormValues {
     points: "5",
     assigneeIds: [],
     recurring: true,
+    alwaysAvailable: false,
     frequency: "WEEKLY",
     interval: "1",
     startDate: today,
@@ -71,6 +73,7 @@ function formForChore(chore: Chore): FormValues {
     points: String(chore.points),
     assigneeIds: chore.default_assignee_ids.map(String),
     recurring: chore.is_recurring,
+    alwaysAvailable: chore.is_always_available,
     frequency: chore.recurrence?.frequency ?? "WEEKLY",
     interval: String(chore.recurrence?.interval ?? 1),
     startDate: chore.recurrence?.start_date ?? new Date().toISOString().slice(0, 10),
@@ -152,12 +155,13 @@ export default function ManagePage() {
       icon: form.icon,
       color: form.color,
       points: Number(form.points),
-      is_recurring: form.recurring,
+      is_recurring: form.alwaysAvailable ? false : form.recurring,
+      is_always_available: form.alwaysAvailable,
       default_assignee_id: form.assigneeIds[0] ? Number(form.assigneeIds[0]) : null,
       default_assignee_ids: form.assigneeIds.map(Number),
-      due_date: form.recurring ? null : form.dueDate,
-      end_date: form.recurring || !form.endDate ? null : form.endDate,
-      recurrence: form.recurring
+      due_date: form.alwaysAvailable || form.recurring ? null : form.dueDate,
+      end_date: form.alwaysAvailable || form.recurring || !form.endDate ? null : form.endDate,
+      recurrence: !form.alwaysAvailable && form.recurring
         ? {
             frequency: form.frequency,
             interval: Math.max(1, Number(form.interval) || 1),
@@ -366,7 +370,7 @@ export default function ManagePage() {
               <li key={chore.id} className="rounded-2xl border p-3" style={{ borderColor: editingId === chore.id ? chore.color : "var(--color-border)", backgroundColor: editingId === chore.id ? `${chore.color}0d` : "var(--color-background)" }}>
                 <button type="button" className="w-full min-w-0 cursor-pointer text-left focus-visible:outline-none focus-visible:ring-2" onClick={() => { setEditingId(chore.id); setTaskImage(null); setForm(formForChore(chore)); setStatus(null); }}>
                   <span className="block truncate text-lg font-bold">{chore.image_url ? <Image src={chore.image_url} alt="" width={32} height={32} unoptimized className="mr-2 inline-block h-8 w-8 rounded-lg object-cover align-middle" /> : chore.icon && <span aria-hidden>{chore.icon} </span>}{chore.title}</span>
-                  <span className="text-sm" style={{ opacity: 0.7 }}>{chore.is_recurring ? `${chore.recurrence?.frequency === "DAILY" ? "Täglich" : chore.recurrence?.frequency === "MONTHLY" ? "Monatlich" : chore.recurrence?.interval === 2 ? "Alle 2 Wochen" : "Wöchentlich"} · feste Zuweisung` : `Am ${chore.due_date}`}</span>
+                  <span className="text-sm" style={{ opacity: 0.7 }}>{chore.is_always_available ? "Immer verfügbar · mehrfach täglich" : chore.is_recurring ? `${chore.recurrence?.frequency === "DAILY" ? "Täglich" : chore.recurrence?.frequency === "MONTHLY" ? "Monatlich" : chore.recurrence?.interval === 2 ? "Alle 2 Wochen" : "Wöchentlich"} · feste Zuweisung` : `Am ${chore.due_date}`}</span>
                   <span className="mt-2 flex flex-wrap gap-1.5">{assigneesForChore(editingId === chore.id ? form.assigneeIds : chore.default_assignee_ids.map(String), members).length > 0 ? assigneesForChore(editingId === chore.id ? form.assigneeIds : chore.default_assignee_ids.map(String), members).map((member) => <span key={member.id} className="rounded-full px-2 py-1 text-xs font-bold" style={{ backgroundColor: `${member.color}1a`, color: member.color }}>{member.emoji} {member.display_name}</span>) : <span className="text-xs" style={{ opacity: 0.65 }}>Keine feste Zuweisung</span>}</span>
                 </button>
               </li>
@@ -382,8 +386,8 @@ export default function ManagePage() {
             <Field label="Aufgabenbild (optional)"><input type="file" accept="image/*" onChange={(event) => setTaskImage(event.currentTarget.files?.[0] ?? null)} className="input file:mr-3 file:cursor-pointer file:rounded-lg file:border-0 file:px-3 file:py-2 file:font-bold" />{taskImage ? <span className="mt-1 block text-xs" style={{ color: "var(--color-secondary)" }}>Neues Bild ausgewählt: {taskImage.name}</span> : editingId !== null && chores.find((chore) => chore.id === editingId)?.image_url ? <span className="mt-1 block text-xs" style={{ opacity: 0.7 }}>Ein Aufgabenbild ist bereits hinterlegt und erscheint dezent als Kartenhintergrund.</span> : <span className="mt-1 block text-xs" style={{ opacity: 0.7 }}>Füllt die Aufgabenkarte dezent als Hintergrundbild.</span>}</Field>
             <div className="grid grid-cols-3 gap-3"><Field label="Icon"><IconAutocomplete key={form.icon} value={form.icon} onChange={(icon) => update("icon", icon)} /></Field><Field label="Farbe"><input type="color" value={form.color} onChange={(event) => update("color", event.target.value)} className="input h-12 p-1" /></Field><Field label="Punkte"><input type="number" min="0" value={form.points} onChange={(event) => update("points", event.target.value)} className="input" /></Field></div>
             <Field label="Zugewiesen an"><div className="grid grid-cols-2 gap-2 sm:grid-cols-3">{members.map((member) => { const selected = form.assigneeIds.includes(String(member.id)); return <button key={member.id} type="button" aria-pressed={selected} onClick={() => update("assigneeIds", selected ? form.assigneeIds.filter((id) => id !== String(member.id)) : [...form.assigneeIds, String(member.id)])} className="touch-action min-h-12 cursor-pointer rounded-xl border px-3 py-2 text-left text-sm font-bold transition-all focus-visible:outline-none focus-visible:ring-2" style={{ borderColor: selected ? member.color : "var(--color-border)", backgroundColor: selected ? `${member.color}1a` : "var(--color-background)" }}>{selected ? "✓ " : ""}{member.emoji} {member.display_name}</button>; })}</div><span className="mt-2 block text-xs" style={{ opacity: 0.75 }}>Antippen wählt ein Mitglied aus oder wieder ab. Für keine feste Zuweisung alle ausgewählten Personen erneut antippen und danach speichern.</span></Field>
-            <label className="flex cursor-pointer items-center gap-3 font-bold"><input type="checkbox" checked={form.recurring} onChange={(event) => update("recurring", event.target.checked)} /> Wiederkehrende Aufgabe</label>
-            {form.recurring ? <div className="grid grid-cols-2 gap-3"><Field label="Frequenz"><select value={form.frequency} onChange={(event) => update("frequency", event.target.value)} className="input"><option value="DAILY">Täglich</option><option value="WEEKLY">Wöchentlich</option><option value="MONTHLY">Monatlich</option></select></Field><Field label={form.frequency === "WEEKLY" ? "Wiederholung" : "Intervall"}>{form.frequency === "WEEKLY" ? <select value={form.interval} onChange={(event) => update("interval", event.target.value)} className="input"><option value="1">Jede Woche</option><option value="2">Alle 2 Wochen</option></select> : <input type="number" min="1" value={form.interval} onChange={(event) => update("interval", event.target.value)} className="input" />}</Field><Field label="Startdatum"><input type="date" value={form.startDate} onChange={(event) => update("startDate", event.target.value)} className="input" /></Field></div> : <div className="grid grid-cols-2 gap-3"><Field label="Aktiv ab"><input type="date" value={form.dueDate} onChange={(event) => update("dueDate", event.target.value)} className="input" /></Field><Field label="Aktiv bis (optional)"><input type="date" min={form.dueDate} value={form.endDate} onChange={(event) => update("endDate", event.target.value)} className="input" /></Field></div>}
+            <div><span className="mb-1 block text-sm font-bold">Gültigkeit</span><div className="grid grid-cols-3 gap-2"><TaskModeButton active={!form.alwaysAvailable && form.recurring} label="Wiederkehrend" onClick={() => setForm((current) => ({ ...current, alwaysAvailable: false, recurring: true }))} /><TaskModeButton active={!form.alwaysAvailable && !form.recurring} label="Einmalig" onClick={() => setForm((current) => ({ ...current, alwaysAvailable: false, recurring: false }))} /><TaskModeButton active={form.alwaysAvailable} label="Immer verfügbar" onClick={() => setForm((current) => ({ ...current, alwaysAvailable: true, recurring: false }))} /></div></div>
+            {form.alwaysAvailable ? <p className="rounded-xl border p-3 text-sm" style={{ borderColor: "var(--color-border)", backgroundColor: "var(--color-muted)" }}>Bleibt dauerhaft sichtbar. Jede Erledigung wird einzeln gespeichert und gibt die eingestellten Punkte.</p> : form.recurring ? <div className="grid grid-cols-2 gap-3"><Field label="Frequenz"><select value={form.frequency} onChange={(event) => update("frequency", event.target.value)} className="input"><option value="DAILY">Täglich</option><option value="WEEKLY">Wöchentlich</option><option value="MONTHLY">Monatlich</option></select></Field><Field label={form.frequency === "WEEKLY" ? "Wiederholung" : "Intervall"}>{form.frequency === "WEEKLY" ? <select value={form.interval} onChange={(event) => update("interval", event.target.value)} className="input"><option value="1">Jede Woche</option><option value="2">Alle 2 Wochen</option></select> : <input type="number" min="1" value={form.interval} onChange={(event) => update("interval", event.target.value)} className="input" />}</Field><Field label="Startdatum"><input type="date" value={form.startDate} onChange={(event) => update("startDate", event.target.value)} className="input" /></Field></div> : <div className="grid grid-cols-2 gap-3"><Field label="Aktiv ab"><input type="date" value={form.dueDate} onChange={(event) => update("dueDate", event.target.value)} className="input" /></Field><Field label="Aktiv bis (optional)"><input type="date" min={form.dueDate} value={form.endDate} onChange={(event) => update("endDate", event.target.value)} className="input" /></Field></div>}
             {status && <p className="text-sm font-semibold" style={{ color: status === "Aufgabe gespeichert." ? "var(--color-secondary)" : "var(--color-destructive)" }}>{status}</p>}
             <div className="flex gap-3"><button type="submit" disabled={pending} className="touch-action inline-flex cursor-pointer items-center gap-2 rounded-xl px-4 py-3 font-bold text-white disabled:opacity-50" style={{ backgroundColor: "var(--color-accent)" }}><SaveIcon />{pending ? "Speichert…" : "Speichern"}</button>{editingId !== null && <button type="button" onClick={() => { setEditingId(null); setTaskImage(null); setForm(emptyForm()); }} className="touch-action inline-flex cursor-pointer items-center gap-2 rounded-xl border px-4 py-3 font-bold" style={{ borderColor: "var(--color-border)" }}><CancelIcon />Abbrechen</button>}</div>
           </form>
@@ -485,6 +489,10 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
 
 function ManageTab({ active, label, onClick }: { active: boolean; label: string; onClick: () => void }) {
   return <button type="button" onClick={onClick} aria-pressed={active} className="touch-action cursor-pointer rounded-xl px-3 py-3 text-sm font-bold transition-all focus-visible:outline-none focus-visible:ring-2" style={{ backgroundColor: active ? "var(--color-background)" : "transparent", color: active ? "var(--color-primary)" : "var(--color-foreground)", boxShadow: active ? "0 2px 8px rgba(15,23,42,0.08)" : "none" }}>{label}</button>;
+}
+
+function TaskModeButton({ active, label, onClick }: { active: boolean; label: string; onClick: () => void }) {
+  return <button type="button" aria-pressed={active} onClick={onClick} className="touch-action min-h-12 cursor-pointer rounded-xl border px-2 py-2 text-sm font-bold focus-visible:outline-none focus-visible:ring-2" style={{ borderColor: active ? "var(--color-primary)" : "var(--color-border)", backgroundColor: active ? "var(--color-muted)" : "var(--color-background)", color: active ? "var(--color-primary)" : "var(--color-foreground)" }}>{label}</button>;
 }
 
 function CopyIcon() {

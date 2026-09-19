@@ -15,7 +15,7 @@ from ninja.files import UploadedFile
 
 from accounts.auth import current_auth, family_jwt_auth, require_parent
 from accounts.models import FamilyMember, Household
-from chores.models import Chore, ChoreContribution, ChoreInstance, RecurrenceRule
+from chores.models import Chore, ChoreCompletion, ChoreContribution, ChoreInstance, RecurrenceRule
 from chores.services import DEFAULT_HORIZON_DAYS, instance_is_current, materialize_chore
 from chores.board import task_board, with_instance_details
 
@@ -140,6 +140,23 @@ class MemberWeeklyStatsOut(Schema):
     points: float
 
 
+class ChoreCompletionOut(Schema):
+    id: int
+    chore_id: int
+    member_id: int
+    member_name: str
+    member_emoji: str
+    completed_at: dt.datetime
+
+    @staticmethod
+    def resolve_member_name(obj: ChoreCompletion) -> str:
+        return obj.member.display_name
+
+    @staticmethod
+    def resolve_member_emoji(obj: ChoreCompletion) -> str:
+        return obj.member.emoji
+
+
 class BoardTaskOut(Schema):
     id: int
     title: str
@@ -151,6 +168,9 @@ class BoardTaskOut(Schema):
     assigned_member_ids: list[int]
     assigned_member_names: list[str]
     assigned_members: list[PublicMemberOut]
+    is_always_available: bool
+    completion_count_today: int
+    latest_always_available_completion: ChoreCompletionOut | None
     available: bool
     next_available_on: dt.date | None
     instance: InstanceOut | None
@@ -191,6 +211,7 @@ class ChoreIn(Schema):
     color: str = "#6366f1"
     points: int = 0
     is_recurring: bool = False
+    is_always_available: bool = False
     default_assignee_id: int | None = None
     default_assignee_ids: list[int] = []
     due_date: dt.date | None = None
@@ -207,6 +228,7 @@ class ChoreOut(Schema):
     image_url: str | None
     points: int
     is_recurring: bool
+    is_always_available: bool
     default_assignee_id: int | None
     default_assignee_ids: list[int]
     due_date: dt.date | None
@@ -288,6 +310,19 @@ def _weekly_stats(household, date_from: dt.date | None, date_to: dt.date):
         member_stats["completed_tasks"] += Decimal("1")
         member_stats["points"] += Decimal(instance.chore.points)
 
+    always_available_completions = ChoreCompletion.objects.filter(
+        chore__household=household,
+        completed_at__date__lte=date_to,
+    ).select_related("chore", "member")
+    if date_from:
+        always_available_completions = always_available_completions.filter(
+            completed_at__date__gte=date_from
+        )
+    for completion in always_available_completions:
+        member_stats = stats[completion.member_id]
+        member_stats["completed_tasks"] += Decimal("1")
+        member_stats["points"] += Decimal(completion.chore.points)
+
     return [
         {
             "member_id": member.id,
@@ -322,6 +357,7 @@ def _dashboard(household):
     instances = _with_instance_details(
         ChoreInstance.objects.filter(
             chore__household=household,
+            chore__is_always_available=False,
             due_date__lte=today,
         ).filter(
             Q(active_until__gte=today)
@@ -362,6 +398,7 @@ def list_instances(
     qs = _with_instance_details(
         ChoreInstance.objects.filter(
             chore__household=auth.household,
+            chore__is_always_available=False,
             due_date__lte=date_to,
         ).filter(
             Q(active_until__gte=date_from)
@@ -398,6 +435,12 @@ def stats(request):
         member=auth.member,
         instance__status=ChoreInstance.Status.DONE,
     ).values_list("instance__due_date", flat=True).distinct())
+    completed_dates.update(
+        ChoreCompletion.objects.filter(
+            chore__household=auth.household,
+            member=auth.member,
+        ).values_list("completed_at__date", flat=True).distinct()
+    )
     streak = 0
     day = dt.date.today()
     while day in completed_dates:
@@ -411,7 +454,50 @@ def stats(request):
             instance__due_date=dt.date.today(),
         ).select_related("instance__chore")
     )
+    points_today += sum(
+        completion.chore.points
+        for completion in ChoreCompletion.objects.filter(
+            chore__household=auth.household,
+            member=auth.member,
+            completed_at__date=dt.date.today(),
+        ).select_related("chore")
+    )
     return {"points_today": points_today, "current_streak": streak}
+
+
+@transaction.atomic
+@router.post("/{chore_id}/complete", response=ChoreCompletionOut)
+def complete_always_available_chore(request, chore_id: int):
+    """Speichert eine weitere Erledigung einer dauerhaft verfügbaren Aufgabe."""
+    auth = current_auth(request)
+    chore = get_object_or_404(
+        Chore.objects.select_for_update().prefetch_related("default_assignees"),
+        id=chore_id,
+        household=auth.household,
+        is_always_available=True,
+    )
+    assigned_ids = set(chore.default_assignees.values_list("id", flat=True))
+    if not assigned_ids and chore.default_assignee_id:
+        assigned_ids.add(chore.default_assignee_id)
+    if assigned_ids and auth.member.id not in assigned_ids:
+        raise HttpError(403, "Diese Aufgabe ist nicht dir zugewiesen.")
+    return ChoreCompletion.objects.create(chore=chore, member=auth.member)
+
+
+@transaction.atomic
+@router.post("/always-available-completions/{completion_id}/undo", response={204: None})
+def undo_always_available_completion(request, completion_id: int):
+    """Nimmt eine eigene Erledigung zurück; Eltern dürfen jede löschen."""
+    auth = current_auth(request)
+    completion = get_object_or_404(
+        ChoreCompletion.objects.select_for_update().select_related("chore"),
+        id=completion_id,
+        chore__household=auth.household,
+    )
+    if not auth.is_parent and completion.member_id != auth.member.id:
+        raise HttpError(403, "Du kannst nur deine eigene Erledigung zurücknehmen.")
+    completion.delete()
+    return 204, None
 
 
 @router.post("/instances/{instance_id}/complete", response=InstanceOut)
@@ -556,6 +642,13 @@ def _validate_payload(payload: ChoreIn) -> None:
     """Prüft die für Einzelaufgaben und Serien jeweils notwendigen Felder."""
     if payload.points < 0:
         raise HttpError(422, "Punkte dürfen nicht negativ sein.")
+    if payload.is_always_available:
+        if payload.is_recurring or payload.recurrence or payload.due_date or payload.end_date:
+            raise HttpError(
+                422,
+                "Eine immer verfügbare Aufgabe darf keinen Termin oder Zeitraum haben.",
+            )
+        return
     if payload.is_recurring and payload.recurrence is None:
         raise HttpError(422, "Eine Serien-Aufgabe benötigt eine Wiederholungsregel.")
     if not payload.is_recurring and payload.due_date is None:
@@ -604,6 +697,8 @@ def _materialize_after_change(chore: Chore, payload: ChoreIn) -> None:
     ).filter(
         Q(due_date__gte=dt.date.today()) | Q(active_until__gte=dt.date.today())
     ).delete()
+    if chore.is_always_available:
+        return
     if chore.is_recurring:
         # Die frische Abfrage vermeidet einen leeren Reverse-Relation-Cache
         # nach `update_or_create`.
@@ -653,6 +748,7 @@ def create_chore(request, payload: ChoreIn):
         color=payload.color,
         points=payload.points,
         is_recurring=payload.is_recurring,
+        is_always_available=payload.is_always_available,
         default_assignee=assignees[0] if assignees else None,
         created_by=auth.member.user,
     )
@@ -676,6 +772,7 @@ def update_chore(request, chore_id: int, payload: ChoreIn):
     chore.color = payload.color
     chore.points = payload.points
     chore.is_recurring = payload.is_recurring
+    chore.is_always_available = payload.is_always_available
     assignees = _assignees_for_payload(payload, auth.household)
     chore.default_assignee = assignees[0] if assignees else None
     chore.save()
