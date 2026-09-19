@@ -1,3 +1,4 @@
+# syntax=docker/dockerfile:1.7
 # Backend-Image (Django + Ninja), gebaut mit uv.
 FROM python:3.13-slim AS base
 
@@ -13,11 +14,13 @@ WORKDIR /app
 
 # Abhängigkeiten zuerst installieren (bessere Layer-Caches).
 COPY pyproject.toml uv.lock ./
-RUN uv sync --frozen --no-install-project --no-dev
+RUN --mount=type=cache,id=gc-family-uv,target=/root/.cache/uv \
+    uv sync --frozen --no-install-project --no-dev
 
 # Projektcode.
 COPY . .
-RUN uv sync --frozen --no-dev
+RUN --mount=type=cache,id=gc-family-uv,target=/root/.cache/uv \
+    uv sync --frozen --no-dev
 
 ENV PATH="/app/.venv/bin:$PATH"
 

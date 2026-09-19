@@ -130,7 +130,13 @@ class AuthApiTests(TestCase):
         )
         updated_child = self.client.put(
             f"/api/auth/household/manage-members/children/{created_child.json()['id']}",
-            data=json.dumps({"display_name": "Geschwister", "pin": "999999"}),
+            data=json.dumps(
+                {
+                    "display_name": "Geschwister",
+                    "pin": "999999",
+                    "color": "#dc2626",
+                }
+            ),
             content_type="application/json",
             HTTP_AUTHORIZATION=f"Bearer {tokens['access']}",
         )
@@ -141,8 +147,11 @@ class AuthApiTests(TestCase):
 
         self.assertEqual(created_parent.status_code, 200)
         self.assertEqual(created_parent.json()["email"], "papa@example.test")
+        self.assertEqual(created_parent.json()["color"], "#2563eb")
         self.assertEqual(created_child.status_code, 200)
+        self.assertEqual(created_child.json()["color"], "#059669")
         self.assertEqual(updated_child.status_code, 200)
+        self.assertEqual(updated_child.json()["color"], "#dc2626")
         self.assertTrue(
             FamilyMember.objects.get(id=created_child.json()["id"]).check_pin("999999")
         )

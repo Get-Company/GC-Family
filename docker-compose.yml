@@ -16,6 +16,7 @@ services:
       retries: 10
 
   backend:
+    image: gc-family-backend:${APP_VERSION:-dev}
     build: .
     restart: unless-stopped
     depends_on:
@@ -43,7 +44,7 @@ services:
       - media:/app/media
 
   scheduler:
-    build: .
+    image: gc-family-backend:${APP_VERSION:-dev}
     restart: unless-stopped
     depends_on:
       db:

@@ -36,6 +36,13 @@ class BoardTests(TestCase):
         self.assertEqual(board[0]["id"], daily.id)
         self.assertTrue(board[0]["available"])
         self.assertEqual(board[0]["assigned_member_ids"], [self.member.id])
+        self.assertEqual(board[0]["assigned_members"][0].id, self.member.id)
+        self.assertEqual(board[0]["assigned_members"][0].color, self.member.color)
+        dashboard = self.client.get("/api/public/dashboard")
+        dashboard_task = next(item for item in dashboard.json()["tasks"] if item["id"] == daily.id)
+        self.assertEqual(dashboard.status_code, 200)
+        self.assertEqual(dashboard_task["assigned_members"][0]["id"], self.member.id)
+        self.assertEqual(dashboard_task["assigned_members"][0]["color"], self.member.color)
         inactive = {item["id"]: item for item in board[1:]}
         self.assertEqual(inactive[completed.id]["last_completion"].id, last.id)
         self.assertIsNone(inactive[completed.id]["next_available_on"])

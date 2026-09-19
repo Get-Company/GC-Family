@@ -63,6 +63,7 @@ def task_board(household, today: dt.date | None = None) -> list[dict]:
             "points": chore.points,
             "assigned_member_ids": [member.id for member in assignees],
             "assigned_member_names": [member.display_name for member in assignees],
+            "assigned_members": assignees,
             "available": available,
             "next_available_on": next_date,
             "instance": instance,

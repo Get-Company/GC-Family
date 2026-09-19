@@ -744,11 +744,8 @@ export interface components {
             email: string;
             /** Pin */
             pin: string;
-            /**
-             * Color
-             * @default #2563eb
-             */
-            color: string;
+            /** Color */
+            color?: string | null;
             /**
              * Emoji
              * @default
@@ -761,11 +758,8 @@ export interface components {
             display_name: string;
             /** Pin */
             pin: string;
-            /**
-             * Color
-             * @default #6366f1
-             */
-            color: string;
+            /** Color */
+            color?: string | null;
             /**
              * Emoji
              * @default
@@ -788,11 +782,8 @@ export interface components {
             display_name: string;
             /** Pin */
             pin?: string | null;
-            /**
-             * Color
-             * @default #6366f1
-             */
-            color: string;
+            /** Color */
+            color?: string | null;
             /**
              * Emoji
              * @default
@@ -811,11 +802,8 @@ export interface components {
             email: string;
             /** Pin */
             pin?: string | null;
-            /**
-             * Color
-             * @default #2563eb
-             */
-            color: string;
+            /** Color */
+            color?: string | null;
             /**
              * Emoji
              * @default
@@ -842,6 +830,8 @@ export interface components {
             assigned_member_ids: number[];
             /** Assigned Member Names */
             assigned_member_names: string[];
+            /** Assigned Members */
+            assigned_members: components["schemas"]["PublicMemberOut"][];
             /** Available */
             available: boolean;
             /** Next Available On */

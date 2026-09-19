@@ -291,6 +291,23 @@ export default function ManagePage() {
     }
   }
 
+  async function changeMemberColor(member: ManagedMember, color: string) {
+    setMemberPending(true);
+    setMemberStatus(null);
+    try {
+      const updated = member.role === "PARENT"
+        ? await updateParentMember(member.id, { display_name: member.display_name, email: member.email ?? "", color, emoji: member.emoji })
+        : await updateChildMember(member.id, { display_name: member.display_name, color, emoji: member.emoji });
+      setManagedMembers((current) => current.map((item) => item.id === updated.id ? updated : item));
+      setMembers((current) => current.map((item) => item.id === updated.id ? { ...item, color: updated.color } : item));
+      setMemberStatus(`Profilfarbe für ${member.display_name} gespeichert.`);
+    } catch {
+      setMemberStatus("Die Profilfarbe konnte nicht gespeichert werden.");
+    } finally {
+      setMemberPending(false);
+    }
+  }
+
   async function selectJingle(member: ManagedMember, type: "completion" | "undo", value: string) {
     const selected = {
       completion: type === "completion" ? value : jingles[member.id]?.completion ?? member.completion_jingle,
@@ -383,12 +400,20 @@ export default function ManagePage() {
             {managedMembers.map((member) => (
               <article key={member.id} className="rounded-2xl border p-4" style={{ borderColor: "var(--color-border)" }}>
                 <div className="flex items-start justify-between gap-3">
-                  <div>
-                    <p className="text-lg font-bold">{member.emoji} {member.display_name}</p>
+                  <div className="flex min-w-0 items-center gap-3">
+                    <span className="flex size-10 shrink-0 items-center justify-center rounded-full text-lg font-bold text-white" style={{ backgroundColor: member.color }}>{member.emoji || member.display_name.trim().charAt(0).toUpperCase()}</span>
+                    <div className="min-w-0">
+                    <p className="text-lg font-bold">{member.display_name}</p>
                     <p className="text-sm" style={{ opacity: 0.7 }}>{member.role === "PARENT" ? `Elternteil · ${member.email}` : "Kind · PIN geschützt"}</p>
+                    </div>
                   </div>
                   <span className="rounded-full px-2 py-1 text-xs font-bold" style={{ backgroundColor: `${member.color}1a`, color: member.color }}>{member.role === "PARENT" ? "Eltern" : "Kind"}</span>
                 </div>
+                <label className="mt-4 flex items-center gap-3 text-sm font-semibold">
+                  <span>Profilfarbe</span>
+                  <input type="color" value={member.color} disabled={memberPending} onChange={(event) => void changeMemberColor(member, event.target.value)} className="size-9 cursor-pointer rounded-lg border p-0.5 disabled:cursor-not-allowed" style={{ borderColor: "var(--color-border)" }} aria-label={`Profilfarbe für ${member.display_name}`} />
+                  <span className="font-mono text-xs" style={{ color: "var(--color-subtle-text)" }}>{member.color}</span>
+                </label>
                 {member.role === "PARENT" && (
                   <div className="mt-4 space-y-3">
                     <div className="flex flex-wrap gap-2">

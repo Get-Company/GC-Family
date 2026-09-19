@@ -150,6 +150,7 @@ class BoardTaskOut(Schema):
     points: int
     assigned_member_ids: list[int]
     assigned_member_names: list[str]
+    assigned_members: list[PublicMemberOut]
     available: bool
     next_available_on: dt.date | None
     instance: InstanceOut | None

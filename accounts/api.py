@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import re
+
 from django.contrib.auth import authenticate
 from django.db import transaction
 from django.shortcuts import get_object_or_404
@@ -76,14 +78,14 @@ class ParentMemberIn(Schema):
     display_name: str
     email: str
     pin: str
-    color: str = "#2563eb"
+    color: str | None = None
     emoji: str = ""
 
 
 class ChildMemberIn(Schema):
     display_name: str
     pin: str
-    color: str = "#6366f1"
+    color: str | None = None
     emoji: str = ""
     completion_jingle: str = FamilyMember.Jingle.SPARKLE
     undo_jingle: str = FamilyMember.Jingle.SOFT
@@ -92,7 +94,7 @@ class ChildMemberIn(Schema):
 class ChildMemberUpdateIn(Schema):
     display_name: str
     pin: str | None = None
-    color: str = "#6366f1"
+    color: str | None = None
     emoji: str = ""
     completion_jingle: str | None = None
     undo_jingle: str | None = None
@@ -102,7 +104,7 @@ class ParentMemberUpdateIn(Schema):
     display_name: str
     email: str
     pin: str | None = None
-    color: str = "#2563eb"
+    color: str | None = None
     emoji: str = ""
 
 
@@ -270,6 +272,32 @@ def _validate_pin(pin: str) -> None:
         raise HttpError(422, "Die PIN muss aus genau sechs Ziffern bestehen.")
 
 
+MEMBER_COLOR_PALETTE = (
+    "#2563eb",  # Blau
+    "#059669",  # Grün
+    "#d97706",  # Orange
+    "#7c3aed",  # Violett
+    "#dc2626",  # Rot
+    "#0891b2",  # Cyan
+    "#be123c",  # Pink
+    "#4f46e5",  # Indigo
+)
+
+
+def _member_color(household, requested_color: str | None) -> str:
+    """Liefert eine überprüfte Wunschfarbe oder die nächste freie Profilfarbe."""
+    if requested_color is not None:
+        if not re.fullmatch(r"#[0-9a-fA-F]{6}", requested_color):
+            raise HttpError(422, "Die Profilfarbe muss ein Hex-Farbwert sein.")
+        return requested_color.lower()
+
+    used = set(household.members.values_list("color", flat=True))
+    return next(
+        (color for color in MEMBER_COLOR_PALETTE if color not in used),
+        MEMBER_COLOR_PALETTE[household.members.count() % len(MEMBER_COLOR_PALETTE)],
+    )
+
+
 def _member_for_pin(pin: str, *, exclude_id: int | None = None) -> FamilyMember | None:
     """PIN-Hashes lassen sich nicht abfragen; bei der kleinen Familienliste
     werden sie deshalb sicher einzeln geprüft."""
@@ -351,7 +379,7 @@ def create_parent_member(request, payload: ParentMemberIn):
         user=user,
         display_name=payload.display_name.strip(),
         role=FamilyMember.Role.PARENT,
-        color=payload.color,
+        color=_member_color(auth.household, payload.color),
         emoji=payload.emoji,
     )
     member.set_pin(payload.pin)
@@ -378,7 +406,7 @@ def create_child_member(request, payload: ChildMemberIn):
         household=auth.household,
         display_name=payload.display_name.strip(),
         role=FamilyMember.Role.CHILD,
-        color=payload.color,
+        color=_member_color(auth.household, payload.color),
         emoji=payload.emoji,
         completion_jingle=payload.completion_jingle,
         undo_jingle=payload.undo_jingle,
@@ -411,9 +439,12 @@ def update_child_member(request, member_id: int, payload: ChildMemberUpdateIn):
     if not payload.display_name.strip():
         raise HttpError(422, "Ein Name ist erforderlich.")
     member.display_name = payload.display_name.strip()
-    member.color = payload.color
+    update_fields = ["display_name"]
+    if payload.color is not None:
+        member.color = _member_color(auth.household, payload.color)
+        update_fields.append("color")
     member.emoji = payload.emoji
-    update_fields = ["display_name", "color", "emoji"]
+    update_fields.append("emoji")
     if payload.completion_jingle is not None:
         _validate_completion_jingle(payload.completion_jingle)
         member.completion_jingle = payload.completion_jingle
@@ -455,9 +486,12 @@ def update_parent_member(request, member_id: int, payload: ParentMemberUpdateIn)
     member.user.username = email
     member.user.save(update_fields=["email", "username"])
     member.display_name = display_name
-    member.color = payload.color
+    update_fields = ["display_name"]
+    if payload.color is not None:
+        member.color = _member_color(auth.household, payload.color)
+        update_fields.append("color")
     member.emoji = payload.emoji
-    update_fields = ["display_name", "color", "emoji"]
+    update_fields.append("emoji")
     if payload.pin is not None:
         _validate_pin(payload.pin)
         _ensure_pin_available(payload.pin, exclude_id=member.id)
