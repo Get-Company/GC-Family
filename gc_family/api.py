@@ -10,12 +10,14 @@ from ninja import NinjaAPI, Schema
 from accounts.api import router as accounts_router
 from chores.api import public_router as public_chores_router
 from chores.api import router as chores_router
+from reminders.api import router as reminders_router
 
 api = NinjaAPI(title="GC-Family API", version="0.1.0")
 
 api.add_router("/auth", accounts_router)
 api.add_router("/chores", chores_router)
 api.add_router("/public", public_chores_router)
+api.add_router("/reminders", reminders_router)
 
 
 class HealthOut(Schema):

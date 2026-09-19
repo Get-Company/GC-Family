@@ -13,6 +13,8 @@ import {
   getChores,
   getManagedMembers,
   getMembers,
+  getNotificationDevices,
+  type Devices,
   updateChildMember,
   updateChore,
   updateParentMember,
@@ -23,6 +25,7 @@ import {
 } from "@/lib/api";
 import { useAuth } from "@/lib/AuthProvider";
 import { useSound } from "@/lib/useSound";
+import { MemberDevice, ReminderSettings } from "@/components/ReminderSettings";
 
 type FormValues = {
   title: string;
@@ -39,7 +42,7 @@ type FormValues = {
   endDate: string;
 };
 
-type ManageSection = "CHORES" | "MEMBERS";
+type ManageSection = "CHORES" | "MEMBERS" | "REMINDERS";
 
 function emptyForm(): FormValues {
   const today = new Date().toISOString().slice(0, 10);
@@ -80,6 +83,7 @@ export default function ManagePage() {
   const router = useRouter();
   const { state: authState } = useAuth();
   const { playJingle } = useSound();
+  const [devices, setDevices] = useState<Devices | null>(null);
   const [chores, setChores] = useState<Chore[]>([]);
   const [members, setMembers] = useState<Member[]>([]);
   const [managedMembers, setManagedMembers] = useState<ManagedMember[]>([]);
@@ -126,6 +130,13 @@ export default function ManagePage() {
       return () => window.clearTimeout(timeout);
     }
   }, [authState.kind, isParent, router]);
+
+  useEffect(() => {
+    if (!isParent) return;
+    let active = true;
+    void getNotificationDevices().then((data) => { if (active) setDevices(data); }).catch(() => { if (active) setDevices({ configured: false, devices: [], error: "Geräteliste konnte nicht geladen werden." }); });
+    return () => { active = false; };
+  }, [isParent]);
 
   function update(field: keyof FormValues, value: string | boolean | string[]) {
     setForm((current) => ({ ...current, [field]: value }));
@@ -317,13 +328,19 @@ export default function ManagePage() {
           <h1 className="text-4xl font-bold">Verwalten</h1>
         </div>
         <Link href="/" className="cursor-pointer rounded-xl border px-4 py-2 font-bold transition-colors hover:bg-[var(--color-muted)] focus-visible:outline-none focus-visible:ring-2" style={{ borderColor: "var(--color-border)" }}>
-          Zum Dashboard
+          Zu den Aufgaben
         </Link>
       </header>
-      <div className="mb-6 grid grid-cols-2 gap-2 rounded-2xl border p-1.5" style={{ borderColor: "var(--color-border)", backgroundColor: "color-mix(in srgb, var(--color-muted) 76%, transparent)" }}>
+      <div className="mb-6 grid grid-cols-3 gap-2 rounded-2xl border p-1.5" style={{ borderColor: "var(--color-border)", backgroundColor: "color-mix(in srgb, var(--color-muted) 76%, transparent)" }}>
         <ManageTab active={section === "CHORES"} label="Aufgaben" onClick={() => setSection("CHORES")} />
-        <ManageTab active={section === "MEMBERS"} label="Mitglieder verwalten" onClick={() => setSection("MEMBERS")} />
+        <ManageTab active={section === "MEMBERS"} label="Mitglieder" onClick={() => setSection("MEMBERS")} />
+        <ManageTab active={section === "REMINDERS"} label="Erinnerungen" onClick={() => setSection("REMINDERS")} />
       </div>
+      {section !== "CHORES" && <div className="mb-5 rounded-xl border p-3 text-sm" style={{ borderColor: "var(--color-border)" }}>
+        <p>{devices === null ? "Handys aus Home Assistant werden geladen…" : devices.error || (devices.devices.length ? "Home Assistant verbunden. Wähle beim Mitglied das passende Handy aus." : "Keine Handys gefunden. Bitte die Home-Assistant-App auf den Handys für Benachrichtigungen einrichten.")}</p>
+        <button type="button" className="button-secondary mt-2 text-xs" onClick={() => void getNotificationDevices().then(setDevices).catch(() => setDevices({ configured: false, devices: [], error: "Geräteliste konnte nicht geladen werden." }))}>Geräte neu laden</button>
+      </div>}
+      {section === "REMINDERS" && <ReminderSettings members={managedMembers} chores={chores} />}
       {section === "CHORES" && <div className="grid gap-5 md:grid-cols-[minmax(15rem,0.76fr)_minmax(0,1.24fr)] md:items-start">
         <section>
           <div className="mb-3 flex items-center justify-between gap-3"><h2 className="text-2xl font-bold">Bestehende Aufgaben</h2><button type="button" onClick={() => { setEditingId(null); setTaskImage(null); setForm(emptyForm()); setStatus(null); }} className="touch-action cursor-pointer rounded-xl px-3 py-2 text-sm font-bold text-white" style={{ backgroundColor: "var(--color-primary)" }}>+ Neu</button></div>
@@ -407,6 +424,7 @@ export default function ManagePage() {
                     <p className="text-xs" style={{ opacity: 0.72 }}>Die Auswahl wird sofort abgespielt und automatisch gespeichert.</p>
                   </div>
                 )}
+                <MemberDevice member={member} devices={devices} onSaved={(service) => setManagedMembers((items) => items.map((item) => item.id === member.id ? { ...item, notification_service: service } : item))} />
               </article>
             ))}
           </div>

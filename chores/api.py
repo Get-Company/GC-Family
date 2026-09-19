@@ -16,7 +16,8 @@ from ninja.files import UploadedFile
 from accounts.auth import current_auth, family_jwt_auth, require_parent
 from accounts.models import FamilyMember, Household
 from chores.models import Chore, ChoreContribution, ChoreInstance, RecurrenceRule
-from chores.services import DEFAULT_HORIZON_DAYS, materialize_chore
+from chores.services import DEFAULT_HORIZON_DAYS, instance_is_current, materialize_chore
+from chores.board import task_board, with_instance_details
 
 router = Router(tags=["chores"], auth=family_jwt_auth)
 public_router = Router(tags=["public"])
@@ -25,7 +26,7 @@ public_router = Router(tags=["public"])
 # --- Schemas ---
 
 
-class MemberOut(Schema):
+class PublicMemberOut(Schema):
     id: int
     display_name: str
     role: str
@@ -89,11 +90,11 @@ class InstanceOut(Schema):
 
     @staticmethod
     def resolve_assigned_member_ids(obj: ChoreInstance) -> list[int]:
-        return list(obj.assigned_members.values_list("id", flat=True))
+        return [member.id for member in obj.assigned_members.all()]
 
     @staticmethod
     def resolve_assigned_member_names(obj: ChoreInstance) -> list[str]:
-        return list(obj.assigned_members.values_list("display_name", flat=True))
+        return [member.display_name for member in obj.assigned_members.all()]
 
     @staticmethod
     def resolve_completed_by_name(obj: ChoreInstance) -> str | None:
@@ -139,10 +140,34 @@ class MemberWeeklyStatsOut(Schema):
     points: float
 
 
+class BoardTaskOut(Schema):
+    id: int
+    title: str
+    description: str
+    icon: str
+    color: str
+    image_url: str | None
+    points: int
+    assigned_member_ids: list[int]
+    assigned_member_names: list[str]
+    available: bool
+    next_available_on: dt.date | None
+    instance: InstanceOut | None
+    last_completion: InstanceOut | None
+
+
+class ScoreboardOut(Schema):
+    week: list[MemberWeeklyStatsOut]
+    month: list[MemberWeeklyStatsOut]
+    all_time: list[MemberWeeklyStatsOut]
+
+
 class PublicDashboardOut(Schema):
-    members: list[MemberOut]
+    members: list[PublicMemberOut]
     instances: list[InstanceOut]
     stats: list[MemberWeeklyStatsOut]
+    tasks: list[BoardTaskOut]
+    scoreboard: ScoreboardOut
 
 
 class RecurrenceIn(Schema):
@@ -215,15 +240,13 @@ class ChoreOut(Schema):
 
 def _week_bounds() -> tuple[dt.date, dt.date]:
     """Die Familienwoche beginnt ausdrücklich am Sonntag um 00:00 Uhr."""
-    today = dt.date.today()
+    today = timezone.localdate()
     start = today - dt.timedelta(days=(today.weekday() + 1) % 7)
     return start, start + dt.timedelta(days=6)
 
 
 def _with_instance_details(queryset):
-    return queryset.select_related("chore", "chore__recurrence", "assigned_member", "completed_by").prefetch_related(
-        "contributions__member", "assigned_members"
-    )
+    return with_instance_details(queryset)
 
 
 def _points_for_contribution(contribution: ChoreContribution) -> float:
@@ -233,7 +256,7 @@ def _points_for_contribution(contribution: ChoreContribution) -> float:
     return float(points)
 
 
-def _weekly_stats(household, date_from: dt.date, date_to: dt.date):
+def _weekly_stats(household, date_from: dt.date | None, date_to: dt.date):
     members = list(household.members.all())
     stats = {
         member.id: {"completed_tasks": Decimal("0"), "points": Decimal("0")}
@@ -241,12 +264,11 @@ def _weekly_stats(household, date_from: dt.date, date_to: dt.date):
     }
     contributions = ChoreContribution.objects.filter(
         instance__chore__household=household,
-        instance__due_date__gte=date_from,
-        instance__due_date__lte=date_to,
+        completed_at__date__lte=date_to,
     ).select_related("instance__chore", "member")
-    contributed_instance_ids = set()
+    if date_from:
+        contributions = contributions.filter(completed_at__date__gte=date_from)
     for contribution in contributions:
-        contributed_instance_ids.add(contribution.instance_id)
         member_stats = stats[contribution.member_id]
         member_stats["completed_tasks"] += contribution.share
         member_stats["points"] += Decimal(str(_points_for_contribution(contribution)))
@@ -254,11 +276,12 @@ def _weekly_stats(household, date_from: dt.date, date_to: dt.date):
     # Bereits vorhandene, vor der Teilungsfunktion erledigte Aufgaben zählen weiter.
     legacy_instances = ChoreInstance.objects.filter(
         chore__household=household,
-        due_date__gte=date_from,
-        due_date__lte=date_to,
         status=ChoreInstance.Status.DONE,
         completed_by_id__isnull=False,
-    ).exclude(id__in=contributed_instance_ids).select_related("chore")
+        contributions__isnull=True,
+    ).filter(Q(completed_at__date__lte=date_to) | Q(completed_at__isnull=True, due_date__lte=date_to)).select_related("chore")
+    if date_from:
+        legacy_instances = legacy_instances.filter(Q(completed_at__date__gte=date_from) | Q(completed_at__isnull=True, due_date__gte=date_from))
     for instance in legacy_instances:
         member_stats = stats[instance.completed_by_id]
         member_stats["completed_tasks"] += Decimal("1")
@@ -279,12 +302,22 @@ def _weekly_stats(household, date_from: dt.date, date_to: dt.date):
 
 @public_router.get("/dashboard", response=PublicDashboardOut)
 def public_dashboard(request):
-    """Öffentliche Familienansicht mit allen heute verfügbaren Aufgaben."""
-    date_from, date_to = _week_bounds()
-    today = dt.date.today()
+    """Öffentliche Familienansicht mit allen Aufgaben und drei Wertungen."""
     household = Household.objects.order_by("id").first()
+    return _dashboard(household)
+
+
+@router.get("/dashboard", response=PublicDashboardOut)
+def household_dashboard(request):
+    return _dashboard(current_auth(request).household)
+
+
+def _dashboard(household):
+    date_from, date_to = _week_bounds()
+    today = timezone.localdate()
     if household is None:
-        return {"members": [], "instances": [], "stats": []}
+        return {"members": [], "instances": [], "stats": [], "tasks": [], "scoreboard": {"week": [], "month": [], "all_time": []}}
+    tasks = task_board(household, today)
     instances = _with_instance_details(
         ChoreInstance.objects.filter(
             chore__household=household,
@@ -294,14 +327,21 @@ def public_dashboard(request):
             | Q(active_until__isnull=True, due_date=today)
         ).order_by("due_date", "chore__title")
     )
+    weekly = _weekly_stats(household, date_from, date_to)
     return {
         "members": list(household.members.all()),
         "instances": list(instances),
-        "stats": _weekly_stats(household, date_from, date_to),
+        "stats": weekly,
+        "tasks": tasks,
+        "scoreboard": {
+            "week": weekly,
+            "month": _weekly_stats(household, today.replace(day=1), today),
+            "all_time": _weekly_stats(household, None, today),
+        },
     }
 
 
-@router.get("/members", response=list[MemberOut])
+@router.get("/members", response=list[PublicMemberOut])
 def list_members(request):
     return list(current_auth(request).household.members.all())
 
@@ -392,16 +432,11 @@ def _complete_instance_atomic(request, instance_id: int, payload: CompleteIn):
     existing = list(instance.contributions.select_related("member").all())
     if instance.status in {ChoreInstance.Status.DONE, ChoreInstance.Status.SKIPPED}:
         raise HttpError(409, "Diese Aufgabe ist bereits abgeschlossen.")
-    if instance.active_until and dt.date.today() > instance.active_until:
+    if not instance_is_current(instance, timezone.localdate()):
         raise HttpError(409, "Diese Aufgabe ist außerhalb ihres Erledigungszeitraums.")
     if any(contribution.member_id == member.id for contribution in existing):
         raise HttpError(409, "Du hast bereits einen Anteil dieser Aufgabe übernommen.")
 
-    recurrence = getattr(instance.chore, "recurrence", None)
-    if instance.due_date > dt.date.today() and (
-        recurrence is None or recurrence.frequency == RecurrenceRule.Frequency.DAILY
-    ):
-        raise HttpError(409, "Diese Tagesaufgabe ist erst an ihrem vorgesehenen Tag verfügbar.")
     assigned_ids = set(instance.assigned_members.values_list("id", flat=True))
     if not assigned_ids and instance.assigned_member_id:
         assigned_ids.add(instance.assigned_member_id)

@@ -81,6 +81,10 @@ class FamilyMember(models.Model):
     )
     emoji = models.CharField(max_length=8, blank=True, help_text="Avatar-Emoji")
     pin_hash = models.CharField(max_length=128, blank=True)
+    notification_service = models.CharField(
+        max_length=160, blank=True,
+        help_text="Home-Assistant-Dienst für das Handy, z. B. mobile_app_mein_handy.",
+    )
     completion_jingle = models.CharField(
         max_length=16,
         choices=Jingle.choices,

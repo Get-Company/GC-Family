@@ -144,6 +144,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/auth/me/pin": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Update Own Child Pin
+         * @description Ein angemeldetes Kind darf ausschließlich seine eigene PIN ändern.
+         */
+        put: operations["accounts_api_update_own_child_pin"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/auth/pin-login": {
         parameters: {
             query?: never;
@@ -261,6 +281,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/chores/dashboard": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Household Dashboard */
+        get: operations["chores_api_household_dashboard"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/chores/members": {
         parameters: {
             query?: never;
@@ -344,10 +381,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /**
-         * Uncomplete Instance
-         * @description Nimmt den eigenen vollständigen oder halben Aufgabenanteil zurück.
-         */
+        /** Uncomplete Instance */
         post: operations["chores_api_uncomplete_instance"];
         delete?: never;
         options?: never;
@@ -469,12 +503,99 @@ export interface paths {
         };
         /**
          * Public Dashboard
-         * @description Öffentliche Familienansicht für die laufende Sonntag-bis-Samstag-Woche.
+         * @description Öffentliche Familienansicht mit allen Aufgaben und drei Wertungen.
          */
         get: operations["chores_api_public_dashboard"];
         put?: never;
         post?: never;
         delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/reminders/devices": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Devices */
+        get: operations["reminders_api_list_devices"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/reminders/members/{member_id}/device": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Update Device */
+        put: operations["reminders_api_update_device"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/reminders/members/{member_id}/test": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Test Device */
+        post: operations["reminders_api_test_device"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/reminders": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Reminders */
+        get: operations["reminders_api_list_reminders"];
+        put?: never;
+        /** Create Reminder */
+        post: operations["reminders_api_create_reminder"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/reminders/{reminder_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Update Reminder */
+        put: operations["reminders_api_update_reminder"];
+        post?: never;
+        /** Delete Reminder */
+        delete: operations["reminders_api_delete_reminder"];
         options?: never;
         head?: never;
         patch?: never;
@@ -572,11 +693,20 @@ export interface components {
             color: string;
             /** Emoji */
             emoji: string;
+            /** Completion Jingle */
+            completion_jingle: string;
+            /** Undo Jingle */
+            undo_jingle: string;
         };
         /** PinIn */
         PinIn: {
             /** Member Id */
             member_id: number;
+            /** Pin */
+            pin: string;
+        };
+        /** PinUpdateIn */
+        PinUpdateIn: {
             /** Pin */
             pin: string;
         };
@@ -603,6 +733,8 @@ export interface components {
             undo_jingle: string;
             /** Email */
             email: string | null;
+            /** Notification Service */
+            notification_service: string;
         };
         /** ParentMemberIn */
         ParentMemberIn: {
@@ -675,6 +807,8 @@ export interface components {
         ParentMemberUpdateIn: {
             /** Display Name */
             display_name: string;
+            /** Email */
+            email: string;
             /** Pin */
             pin?: string | null;
             /**
@@ -687,6 +821,33 @@ export interface components {
              * @default
              */
             emoji: string;
+        };
+        /** BoardTaskOut */
+        BoardTaskOut: {
+            /** Id */
+            id: number;
+            /** Title */
+            title: string;
+            /** Description */
+            description: string;
+            /** Icon */
+            icon: string;
+            /** Color */
+            color: string;
+            /** Image Url */
+            image_url: string | null;
+            /** Points */
+            points: number;
+            /** Assigned Member Ids */
+            assigned_member_ids: number[];
+            /** Assigned Member Names */
+            assigned_member_names: string[];
+            /** Available */
+            available: boolean;
+            /** Next Available On */
+            next_available_on: string | null;
+            instance: components["schemas"]["InstanceOut"] | null;
+            last_completion: components["schemas"]["InstanceOut"] | null;
         };
         /** ContributionOut */
         ContributionOut: {
@@ -747,6 +908,55 @@ export interface components {
             completed_by_name: string | null;
             /** Contributions */
             contributions: components["schemas"]["ContributionOut"][];
+        };
+        /** MemberWeeklyStatsOut */
+        MemberWeeklyStatsOut: {
+            /** Member Id */
+            member_id: number;
+            /** Display Name */
+            display_name: string;
+            /** Emoji */
+            emoji: string;
+            /** Color */
+            color: string;
+            /** Completed Tasks */
+            completed_tasks: number;
+            /** Points */
+            points: number;
+        };
+        /** PublicDashboardOut */
+        PublicDashboardOut: {
+            /** Members */
+            members: components["schemas"]["PublicMemberOut"][];
+            /** Instances */
+            instances: components["schemas"]["InstanceOut"][];
+            /** Stats */
+            stats: components["schemas"]["MemberWeeklyStatsOut"][];
+            /** Tasks */
+            tasks: components["schemas"]["BoardTaskOut"][];
+            scoreboard: components["schemas"]["ScoreboardOut"];
+        };
+        /** PublicMemberOut */
+        PublicMemberOut: {
+            /** Id */
+            id: number;
+            /** Display Name */
+            display_name: string;
+            /** Role */
+            role: string;
+            /** Color */
+            color: string;
+            /** Emoji */
+            emoji: string;
+        };
+        /** ScoreboardOut */
+        ScoreboardOut: {
+            /** Week */
+            week: components["schemas"]["MemberWeeklyStatsOut"][];
+            /** Month */
+            month: components["schemas"]["MemberWeeklyStatsOut"][];
+            /** All Time */
+            all_time: components["schemas"]["MemberWeeklyStatsOut"][];
         };
         /** StatsOut */
         StatsOut: {
@@ -883,29 +1093,84 @@ export interface components {
             /** End Date */
             end_date?: string | null;
         };
-        /** MemberWeeklyStatsOut */
-        MemberWeeklyStatsOut: {
+        /** DeviceOut */
+        DeviceOut: {
+            /** Service */
+            service: string;
+            /** Name */
+            name: string;
+        };
+        /** DevicesOut */
+        DevicesOut: {
+            /** Configured */
+            configured: boolean;
+            /** Devices */
+            devices: components["schemas"]["DeviceOut"][];
+            /** Error */
+            error?: string | null;
+        };
+        /** DeviceIn */
+        DeviceIn: {
+            /** Service */
+            service: string;
+        };
+        /** ReminderOut */
+        ReminderOut: {
             /** Member Id */
             member_id: number;
-            /** Display Name */
-            display_name: string;
-            /** Emoji */
-            emoji: string;
-            /** Color */
-            color: string;
-            /** Completed Tasks */
-            completed_tasks: number;
-            /** Points */
-            points: number;
+            /** Kind */
+            kind: string;
+            /** Chore Id */
+            chore_id?: number | null;
+            /**
+             * Message
+             * @default
+             */
+            message: string;
+            /**
+             * Time
+             * Format: time
+             */
+            time: string;
+            /** Weekdays */
+            weekdays: number[];
+            /**
+             * Enabled
+             * @default true
+             */
+            enabled: boolean;
+            /** Id */
+            id: number;
+            /** Last Sent At */
+            last_sent_at: string | null;
+            /** Last Error */
+            last_error: string;
         };
-        /** PublicDashboardOut */
-        PublicDashboardOut: {
-            /** Members */
-            members: components["schemas"]["MemberOut"][];
-            /** Instances */
-            instances: components["schemas"]["InstanceOut"][];
-            /** Stats */
-            stats: components["schemas"]["MemberWeeklyStatsOut"][];
+        /** ReminderIn */
+        ReminderIn: {
+            /** Member Id */
+            member_id: number;
+            /** Kind */
+            kind: string;
+            /** Chore Id */
+            chore_id?: number | null;
+            /**
+             * Message
+             * @default
+             */
+            message: string;
+            /**
+             * Time
+             * Format: time
+             */
+            time: string;
+            /** Weekdays */
+            weekdays: number[];
+            /**
+             * Enabled
+             * @default true
+             */
+            enabled: boolean;
         };
     };
     responses: never;
@@ -1072,6 +1337,30 @@ export interface operations {
             };
         };
     };
+    accounts_api_update_own_child_pin: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PinUpdateIn"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuthMemberOut"];
+                };
+            };
+        };
+    };
     accounts_api_family_pin_login: {
         parameters: {
             query?: never;
@@ -1216,6 +1505,26 @@ export interface operations {
             };
         };
     };
+    chores_api_household_dashboard: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PublicDashboardOut"];
+                };
+            };
+        };
+    };
     chores_api_list_members: {
         parameters: {
             query?: never;
@@ -1231,7 +1540,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["MemberOut"][];
+                    "application/json": components["schemas"]["PublicMemberOut"][];
                 };
             };
         };
@@ -1511,6 +1820,162 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["PublicDashboardOut"];
                 };
+            };
+        };
+    };
+    reminders_api_list_devices: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DevicesOut"];
+                };
+            };
+        };
+    };
+    reminders_api_update_device: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                member_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DeviceIn"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DeviceIn"];
+                };
+            };
+        };
+    };
+    reminders_api_test_device: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                member_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No Content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    reminders_api_list_reminders: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReminderOut"][];
+                };
+            };
+        };
+    };
+    reminders_api_create_reminder: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReminderIn"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReminderOut"];
+                };
+            };
+        };
+    };
+    reminders_api_update_reminder: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                reminder_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReminderIn"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReminderOut"];
+                };
+            };
+        };
+    };
+    reminders_api_delete_reminder: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                reminder_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No Content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };

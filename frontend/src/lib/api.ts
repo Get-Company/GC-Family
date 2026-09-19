@@ -51,7 +51,8 @@ async function apiRequest<T>(
     if (res.status === 401 && token && token === accessToken) {
       unauthorizedHandler?.();
     }
-    throw new ApiError(res.status, `${init.method ?? "GET"} ${path} → ${res.status}`);
+    const body = await res.json().catch(() => null);
+    throw new ApiError(res.status, typeof body?.detail === "string" ? body.detail : "Die Anfrage konnte nicht verarbeitet werden.");
   }
   if (res.status === 204) {
     return undefined as T;
@@ -92,7 +93,7 @@ export function apiDelete(path: string): Promise<void> {
 }
 
 export type Health = components["schemas"]["HealthOut"];
-export type Member = components["schemas"]["MemberOut"];
+export type Member = components["schemas"]["PublicMemberOut"];
 export type ManagedMember = components["schemas"]["ManagedMemberOut"];
 export type Instance = components["schemas"]["InstanceOut"];
 export type ChoreStatus = Instance["status"];
@@ -104,6 +105,11 @@ export type ChoreInput = components["schemas"]["ChoreIn"];
 export type Stats = components["schemas"]["StatsOut"];
 export type PublicDashboard = components["schemas"]["PublicDashboardOut"];
 export type MemberWeeklyStats = components["schemas"]["MemberWeeklyStatsOut"];
+export type BoardTask = components["schemas"]["BoardTaskOut"];
+export type ScoreboardData = components["schemas"]["ScoreboardOut"];
+export type Reminder = components["schemas"]["ReminderOut"];
+export type ReminderInput = components["schemas"]["ReminderIn"];
+export type Devices = components["schemas"]["DevicesOut"];
 
 export const getMembers = () => apiGet<Member[]>("/chores/members");
 
@@ -144,6 +150,16 @@ export const loginWithPin = (pin: string) =>
   apiPost<AccessToken>("/auth/pin-login", { pin }, { token: null });
 
 export const getPublicDashboard = () => apiGet<PublicDashboard>("/public/dashboard");
+export const getDashboard = () => apiGet<PublicDashboard>("/chores/dashboard");
+
+export const getNotificationDevices = () => apiGet<Devices>("/reminders/devices");
+export const updateNotificationDevice = (id: number, service: string) => apiPut(`/reminders/members/${id}/device`, { service });
+export const testNotificationDevice = (id: number) => apiPost<void>(`/reminders/members/${id}/test`);
+export const getReminders = () => apiGet<Reminder[]>("/reminders");
+export const saveReminder = (id: number | null, payload: ReminderInput) => id === null
+  ? apiPost<Reminder>("/reminders", payload)
+  : apiPut<Reminder>(`/reminders/${id}`, payload);
+export const deleteReminder = (id: number) => apiDelete(`/reminders/${id}`);
 
 export const getChores = () => apiGet<Chore[]>("/chores");
 

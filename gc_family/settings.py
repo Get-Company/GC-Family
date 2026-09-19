@@ -58,6 +58,7 @@ INSTALLED_APPS = [
     # Local
     "accounts",
     "chores",
+    "reminders",
 ]
 
 MIDDLEWARE = [
@@ -95,6 +96,11 @@ ASGI_APPLICATION = "gc_family.asgi.application"
 
 # Custom user model (Eltern-Login per E-Mail)
 AUTH_USER_MODEL = "accounts.User"
+
+# Zugangsdaten bleiben ausschließlich auf dem Server.
+HOME_ASSISTANT_URL = os.getenv("HOME_ASSISTANT_URL", "").rstrip("/")
+HOME_ASSISTANT_TOKEN = os.getenv("HOME_ASSISTANT_TOKEN", "")
+GC_FAMILY_PUBLIC_URL = os.getenv("GC_FAMILY_PUBLIC_URL", "").rstrip("/")
 
 
 # Database

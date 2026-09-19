@@ -7,7 +7,10 @@ werden dank `get_or_create` nicht dupliziert.
 
 from __future__ import annotations
 
+import calendar
 import datetime as dt
+
+from django.utils import timezone
 
 from .models import Chore, ChoreInstance, RecurrenceRule
 
@@ -130,7 +133,7 @@ def materialize_household(
     horizon_days: int = DEFAULT_HORIZON_DAYS,
 ) -> list[ChoreInstance]:
     """Materialisiert alle Serien-Aufgaben eines Haushalts über den Horizont."""
-    start = start or dt.date.today()
+    start = start or timezone.localdate()
     end = start + dt.timedelta(days=horizon_days)
 
     created: list[ChoreInstance] = []
@@ -138,3 +141,61 @@ def materialize_household(
     for chore in recurring:
         created.extend(materialize_chore(chore, start, end))
     return created
+
+
+def instance_is_current(instance: ChoreInstance, today: dt.date) -> bool:
+    """Datum und Regelstart gelten auch für flexible Wochenaufgaben."""
+    rule = getattr(instance.chore, "recurrence", None)
+    return (
+        instance.due_date <= today <= (instance.active_until or instance.due_date)
+        and (rule is None or rule.start_date <= today)
+    )
+
+
+def next_occurrence(rule: RecurrenceRule, after: dt.date) -> dt.date | None:
+    """Nächster Termin ohne Materialisierung eines großen Zukunftsfensters."""
+    start = max(after + dt.timedelta(days=1), rule.start_date)
+    interval = max(1, rule.interval)
+    candidate = None
+    if rule.frequency == RecurrenceRule.Frequency.DAILY:
+        elapsed = (start - rule.start_date).days
+        candidate = rule.start_date + dt.timedelta(days=((elapsed + interval - 1) // interval) * interval)
+    elif rule.frequency == RecurrenceRule.Frequency.WEEKLY:
+        if not rule.weekdays:
+            anchor = _week_start(rule.start_date)
+            elapsed = (_week_start(start) - anchor).days // 7
+            week = anchor + dt.timedelta(weeks=((elapsed + interval - 1) // interval) * interval)
+            candidate = max(week, rule.start_date)
+            if candidate <= after:
+                candidate = week + dt.timedelta(weeks=interval)
+        else:
+            # Entspricht der bestehenden, am Startdatum verankerten Wochenregel.
+            elapsed = (start - rule.start_date).days // 7
+            block = (elapsed // interval) * interval
+            for week in (block, block + interval):
+                anchor = rule.start_date + dt.timedelta(weeks=week)
+                dates = [anchor + dt.timedelta(days=offset) for offset in range(7)]
+                matches = [day for day in dates if day >= start and day.weekday() in rule.weekdays]
+                if matches:
+                    candidate = min(matches)
+                    break
+    elif rule.frequency == RecurrenceRule.Frequency.MONTHLY:
+        elapsed = _months_between(rule.start_date, start)
+        month_offset = ((elapsed + interval - 1) // interval) * interval
+        # Der gregorianische Kalender wiederholt sich nach 4800 Monaten.
+        for _ in range(4800):
+            month_index = rule.start_date.year * 12 + rule.start_date.month - 1 + month_offset
+            year, month = divmod(month_index, 12)
+            month += 1
+            if year > 9999:
+                break
+            target = rule.day_of_month or rule.start_date.day
+            if target <= calendar.monthrange(year, month)[1]:
+                day = dt.date(year, month, target)
+                if day >= start:
+                    candidate = day
+                    break
+            month_offset += interval
+    if candidate and (rule.end_date is None or candidate <= rule.end_date):
+        return candidate
+    return None

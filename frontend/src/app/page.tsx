@@ -1,21 +1,13 @@
 "use client";
 
-import { AnimatePresence, motion } from "framer-motion";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
-import { TaskCard } from "@/components/TaskCard";
-import {
-  completeInstance,
-  getPublicDashboard,
-  reopenInstance,
-  uncompleteInstance,
-  updateOwnChildPin,
-  type Instance,
-  type Member,
-  type MemberWeeklyStats,
-} from "@/lib/api";
+import { PinLogin } from "@/components/PinLogin";
+import { TaskTile } from "@/components/TaskTile";
+import { Scoreboard } from "@/components/Scoreboard";
+import { ApiError, completeInstance, getDashboard, getPublicDashboard, reopenInstance, uncompleteInstance, updateOwnChildPin, type BoardTask, type Me, type PublicDashboard } from "@/lib/api";
 import { useAuth } from "@/lib/AuthProvider";
 import { useSound } from "@/lib/useSound";
 import { randomInspiration } from "@/lib/inspirations";
@@ -23,177 +15,95 @@ import { randomInspiration } from "@/lib/inspirations";
 export default function Dashboard() {
   const { state: authState, logout } = useAuth();
   const pathname = usePathname();
-  const [members, setMembers] = useState<Member[]>([]);
-  const [instances, setInstances] = useState<Instance[]>([]);
-  const [stats, setStats] = useState<MemberWeeklyStats[]>([]);
+  const [dashboard, setDashboard] = useState<PublicDashboard | null>(null);
   const [filter, setFilter] = useState<number | null>(null);
-  const [statusFilter, setStatusFilter] = useState<"ALL" | "OPEN" | "DONE">("ALL");
   const [error, setError] = useState<string | null>(null);
+  const [pendingId, setPendingId] = useState<number | null>(null);
+  const actionPending = useRef(false);
+  const requestId = useRef(0);
   const [newChildPin, setNewChildPin] = useState("");
   const [childPinStatus, setChildPinStatus] = useState<string | null>(null);
   const [childPinPending, setChildPinPending] = useState(false);
   const { play, playJingle } = useSound();
-
-  const loadDashboard = useCallback(async () => {
-    const dashboard = await getPublicDashboard();
-    setMembers(dashboard.members);
-    setInstances(dashboard.instances);
-    setStats(dashboard.stats);
-  }, []);
-
-  useEffect(() => {
-    const timeout = window.setTimeout(() => {
-      void loadDashboard().catch(() => setError("Die Aufgaben konnten nicht geladen werden."));
-    }, 0);
-    return () => window.clearTimeout(timeout);
-  }, [loadDashboard]);
-
   const currentMember = authState.kind === "authenticated" ? authState.me.member : null;
   const activeChild = currentMember?.role === "CHILD" ? currentMember : null;
   const isParent = currentMember?.role === "PARENT";
-  const canAccessBackend = authState.kind === "authenticated" && Boolean(authState.me.user?.can_access_backend);
-  const visible = useMemo(() => {
-    const activeFilter = activeChild?.id ?? filter;
-    return instances.filter((instance) => {
-      const isFree = instance.assigned_member_ids.length === 0 && instance.assigned_member_id === null;
-      const memberMatches = activeChild
-        ? isFree || instance.assigned_member_ids.includes(activeChild.id)
-        : activeFilter === null || instance.assigned_member_ids.includes(activeFilter);
-      const statusMatches = statusFilter === "ALL" || (statusFilter === "DONE" ? instance.status === "DONE" : instance.status !== "DONE");
-      return memberMatches && statusMatches;
-    });
-  }, [activeChild, filter, instances, statusFilter]);
-  const rankedStats = useMemo(() => stats.filter((stat) => stat.points > 0).sort((a, b) => b.points - a.points || b.completed_tasks - a.completed_tasks), [stats]);
+  const authenticated = authState.kind === "authenticated";
+  const canAccessBackend = authenticated && Boolean(authState.me.user?.can_access_backend);
+  const view = pathname === "/scoreboard" ? "scoreboard" : pathname === "/profile" ? "profile" : "tasks";
 
-  async function handleComplete(id: number, share = false) {
-    if (!currentMember) {
-      setError("Melde dich mit deinem Profil und deiner PIN an, bevor du eine Aufgabe übernimmst.");
-      play("error");
-      return;
-    }
+  const loadDashboard = useCallback(async () => {
+    const id = ++requestId.current;
+    const data = await (authenticated ? getDashboard() : getPublicDashboard());
+    if (id === requestId.current) { setDashboard(data); setError(null); }
+  }, [authenticated]);
+
+  const invalidateRequests = useCallback(() => { requestId.current++; }, []);
+
+  useEffect(() => {
+    if (authState.kind === "loading") return;
+    const refresh = () => { if (!document.hidden && !actionPending.current) void loadDashboard().catch(() => setError("Die Aufgaben konnten nicht aktualisiert werden. Bitte erneut versuchen.")); };
+    const timeout = window.setTimeout(refresh, 0);
+    const interval = window.setInterval(refresh, 60000);
+    window.addEventListener("focus", refresh);
+    document.addEventListener("visibilitychange", refresh);
+    return () => { invalidateRequests(); window.clearTimeout(timeout); window.clearInterval(interval); window.removeEventListener("focus", refresh); document.removeEventListener("visibilitychange", refresh); };
+  }, [authState.kind, loadDashboard, invalidateRequests]);
+
+  async function handleAction(task: BoardTask, action: "complete" | "share" | "undo" | "reopen") {
+    if (!task.instance || !currentMember || actionPending.current) return;
+    actionPending.current = true;
+    setPendingId(task.id);
     setError(null);
+    // Ein älterer Leseabruf darf den neuen Abschluss nicht überschreiben.
+    requestId.current++;
     try {
-      const instance = await completeInstance(id, currentMember.id, share);
-      setInstances((current) => current.map((item) => item.id === id ? instance : item));
-      playJingle(currentMember.completion_jingle);
-      void loadDashboard().catch(() => {
-        // Der Abschluss war bereits erfolgreich; nur die Hintergrund-Aktualisierung
-        // ist fehlgeschlagen und darf nicht als Berechtigungsfehler erscheinen.
-      });
-    } catch {
-      const task = instances.find((item) => item.id === id);
-      const owners = task?.assigned_member_names?.join(" und ") || task?.assigned_member_name || "einem anderen Familienmitglied";
-      const isFree = task?.assigned_member_ids.length === 0 && task?.assigned_member_id === null;
-      setError(share ? `${currentMember.display_name}, dein halber Anteil konnte gerade nicht übernommen werden. Prüfe bitte, ob die Aufgabe noch offen ist.` : isFree ? `${currentMember.display_name}, diese freie Aufgabe konnte gerade nicht übernommen werden. Bitte lade die Seite neu und versuche es noch einmal.` : `${currentMember.display_name}, diese Aufgabe gehört ${owners}. Schön, dass du helfen möchtest – übernimm sie bitte gemeinsam oder frage kurz nach.`);
+      const instance = action === "undo" ? await uncompleteInstance(task.instance.id)
+        : action === "reopen" ? await reopenInstance(task.instance.id)
+        : await completeInstance(task.instance.id, currentMember.id, action === "share");
+      setDashboard((current) => current ? { ...current, tasks: current.tasks.map((item) => item.id === task.id ? { ...item, instance, available: instance.status === "OPEN" || instance.status === "PARTIAL", last_completion: instance.status === "DONE" ? instance : item.last_completion?.id === instance.id ? null : item.last_completion } : item) } : current);
+      playJingle(action === "undo" || action === "reopen" ? currentMember.undo_jingle : currentMember.completion_jingle);
+      void loadDashboard().catch(() => {});
+    } catch (caught) {
+      setError(caught instanceof ApiError ? caught.message : "Speichern hat nicht geklappt. Bitte erneut versuchen.");
       play("error");
-    }
-  }
-
-  async function handleReopen(id: number) {
-    try {
-      const instance = await reopenInstance(id);
-      setInstances((current) => current.map((item) => item.id === id ? instance : item));
-      await loadDashboard();
-    } catch {
-      setError("Die Aufgabe konnte nicht zurückgesetzt werden.");
-    }
-  }
-
-  async function handleUndo(id: number) {
-    try {
-      const instance = await uncompleteInstance(id);
-      setInstances((current) => current.map((item) => item.id === id ? instance : item));
-      await loadDashboard();
-      if (currentMember) {
-        playJingle(currentMember.undo_jingle, "click");
-      }
-    } catch {
-      setError("Dein Anteil konnte nicht zurückgenommen werden.");
-      play("error");
-    }
+    } finally { actionPending.current = false; setPendingId(null); }
   }
 
   async function changeOwnChildPin() {
-    if (!activeChild || newChildPin.length !== 6) {
-      setChildPinStatus("Bitte gib eine sechsstellige PIN ein.");
-      return;
-    }
+    if (!activeChild || newChildPin.length !== 6) { setChildPinStatus("Bitte gib eine sechsstellige PIN ein."); return; }
     setChildPinPending(true);
-    setChildPinStatus(null);
-    try {
-      await updateOwnChildPin(newChildPin);
-      setNewChildPin("");
-      setChildPinStatus("Deine PIN wurde geändert.");
-    } catch {
-      setChildPinStatus("Die PIN konnte nicht geändert werden. Sie darf noch nicht verwendet werden.");
-    } finally {
-      setChildPinPending(false);
-    }
+    try { await updateOwnChildPin(newChildPin); setNewChildPin(""); setChildPinStatus("Deine PIN wurde geändert."); }
+    catch { setChildPinStatus("Die PIN konnte nicht geändert werden. Sie darf noch nicht verwendet werden."); }
+    finally { setChildPinPending(false); }
   }
 
-  const { start, end } = currentWeekBounds();
-  const view = pathname === "/tasks" ? "tasks" : pathname === "/scoreboard" ? "scoreboard" : pathname === "/profile" ? "profile" : "dashboard";
-  const pageTitle = view === "tasks" ? "Aufgaben" : view === "scoreboard" ? "Scoreboard" : view === "profile" ? "Mein Profil" : "Willkommen bei GC-Family";
-
-  return (
-    <main className="mx-auto w-full max-w-6xl flex-1 px-4 py-6 sm:px-6 sm:py-8">
-      <header className="mb-7 flex flex-wrap items-start justify-between gap-4">
-        <div>
-          <p className="text-sm font-bold uppercase tracking-wide" style={{ color: "var(--color-secondary)" }}>GC-Family</p>
-          <h1 className="text-2xl font-semibold sm:text-4xl">{pageTitle}</h1>
-          {view === "dashboard" && <p className="mt-1 text-lg font-bold" style={{ color: "var(--color-primary)" }}>Heute: {formatLongDate(new Date())}</p>}
-          <p className="mt-1 text-sm" style={{ opacity: 0.7 }}>{formatDate(start)} – {formatDate(end)}</p>
-        </div>
-        <div className="flex flex-wrap items-center gap-2">
-          {isParent ? <><Link href="/history" className="button-secondary">Verlauf</Link>{canAccessBackend && <Link href="/admin/" className="button-secondary">Backend</Link>}<button type="button" onClick={logout} className="button-secondary">Abmelden</button></> : activeChild ? <button type="button" onClick={logout} className="button-secondary">{activeChild.emoji} abmelden</button> : null}
-        </div>
-      </header>
-
-      {view === "dashboard" && <section className="grid gap-5 lg:grid-cols-[1.15fr_0.85fr]">
-        <QuickTaskOverview instances={visible} currentMemberId={currentMember?.id ?? null} isParent={Boolean(isParent)} onComplete={handleComplete} onShare={(id) => handleComplete(id, true)} onReopen={handleReopen} onUndo={handleUndo} />
-        <Scoreboard stats={rankedStats} />
-      </section>}
-
-      {view === "profile" && <section className="mx-auto max-w-2xl"><ProfilePanel activeMember={currentMember} childPin={newChildPin} childPinPending={childPinPending} childPinStatus={childPinStatus} onChildPinChange={setNewChildPin} onChangeOwnChildPin={() => void changeOwnChildPin()} /></section>}
-
-      {view === "scoreboard" && <section className="mx-auto max-w-3xl"><Scoreboard stats={rankedStats} /></section>}
-
-      {view === "tasks" && <section>
-        <div className="mb-4 flex flex-wrap items-end justify-between gap-3"><div><h2 className="text-2xl font-semibold">Aufgaben</h2><p className="text-sm" style={{ opacity: 0.7 }}>Alle Aufgaben, die heute erledigt werden können.</p></div><div className="space-y-2"><div className="flex flex-wrap gap-2"><FilterChip active={filter === null} label="Alle Personen" onClick={() => setFilter(null)} />{members.map((member) => <FilterChip key={member.id} active={filter === member.id} label={`${member.emoji} ${member.display_name}`} color={member.color} onClick={() => setFilter(member.id)} />)}</div><div className="flex flex-wrap gap-2"><FilterChip active={statusFilter === "ALL"} label="Alle" onClick={() => setStatusFilter("ALL")} /><FilterChip active={statusFilter === "OPEN"} label="Offen" onClick={() => setStatusFilter("OPEN")} /><FilterChip active={statusFilter === "DONE"} label="Erledigt" onClick={() => setStatusFilter("DONE")} /></div></div></div>
-        {error && <p className="mb-4 rounded-xl px-4 py-3 text-sm font-bold" style={{ color: "var(--color-destructive)", backgroundColor: "#fee2e2" }}>{error}</p>}
-        {visible.length === 0 ? <p className="rounded-2xl border border-dashed p-8 text-center" style={{ borderColor: "var(--color-border)" }}>Für diese Auswahl gibt es keine Aufgaben.</p> : <TaskSections instances={visible} currentMemberId={currentMember?.id ?? null} isParent={Boolean(isParent)} onComplete={handleComplete} onShare={(id) => handleComplete(id, true)} onReopen={handleReopen} onUndo={handleUndo} />}
-      </section>}
-    </main>
-  );
+  const visible = dashboard?.tasks.filter((task) => filter === null || task.assigned_member_ids.length === 0 || task.assigned_member_ids.includes(filter)) ?? [];
+  return <main className="mx-auto w-full max-w-4xl flex-1 px-4 py-6 sm:px-6 sm:py-8">
+    <header className="mb-5 flex flex-wrap items-center justify-between gap-3">
+      <h1 className="text-2xl font-semibold sm:text-3xl">{view === "tasks" ? "Aufgaben" : view === "scoreboard" ? "Scoreboard" : "Mein Profil"}</h1>
+      {currentMember && <div className="flex flex-wrap gap-2">{isParent && <Link href="/history" className="button-secondary text-xs">Verlauf</Link>}{canAccessBackend && <Link href="/admin/" className="button-secondary text-xs">Backend</Link>}<button type="button" onClick={logout} className="button-secondary text-xs">Abmelden</button></div>}
+    </header>
+    {view === "tasks" && <>
+      {currentMember ? <section className="mb-5"><h2 className="text-xl font-semibold">Hallo {currentMember.emoji} {currentMember.display_name}!</h2><p className="mt-1 text-sm" style={{ color: "var(--color-subtle-text)" }}>Was packen wir heute an?</p></section> : authState.kind === "anonymous" ? <PinLogin /> : <p className="mb-5 text-sm" role="status">Profil wird geladen…</p>}
+      <div className="mb-4 flex flex-wrap gap-2" role="group" aria-label="Aufgaben nach Person filtern"><FilterChip active={filter === null} label="Alle" onClick={() => setFilter(null)} />{dashboard?.members.map((member) => <FilterChip key={member.id} active={filter === member.id} label={`${member.emoji} ${member.display_name}`} onClick={() => setFilter(member.id)} />)}</div>
+      <p className="mb-4 text-xs" style={{ color: "var(--color-subtle-text)" }}>Antippen für Details und zum Abhaken.</p>
+    </>}
+    {error && <div role="alert" className="mb-4 rounded-xl border p-3 text-sm" style={{ color: "var(--color-destructive)", borderColor: "var(--color-border)" }}>{error}<button type="button" onClick={() => void loadDashboard().catch(() => {})} className="ml-2 cursor-pointer underline">Erneut laden</button></div>}
+    {view === "profile" ? <ProfilePanel activeMember={currentMember} childPin={newChildPin} childPinPending={childPinPending} childPinStatus={childPinStatus} onChildPinChange={setNewChildPin} onChangeOwnChildPin={() => void changeOwnChildPin()} /> : dashboard ? view === "scoreboard" ? <Scoreboard data={dashboard.scoreboard} /> : visible.length ? <ul className="grid grid-cols-2 items-start gap-3 sm:gap-4">{visible.map((task) => <TaskTile key={task.id} task={task} memberId={currentMember?.id ?? null} isParent={Boolean(isParent)} pending={pendingId === task.id} onAction={handleAction} />)}</ul> : <p className="rounded-2xl border border-dashed p-8 text-center" style={{ borderColor: "var(--color-border)" }}>Für diese Auswahl gibt es keine Aufgaben.</p> : !error && <div role="status" aria-label="Aufgaben werden geladen" className="grid grid-cols-2 gap-3">{[0, 1, 2, 3].map((id) => <div key={id} className="h-44 animate-pulse rounded-2xl" style={{ backgroundColor: "var(--color-muted)" }} />)}</div>}
+  </main>;
 }
 
-function ProfilePanel({ activeMember, childPin, childPinPending, childPinStatus, onChildPinChange, onChangeOwnChildPin }: { activeMember: Member | null; childPin: string; childPinPending: boolean; childPinStatus: string | null; onChildPinChange: (pin: string) => void; onChangeOwnChildPin: () => void }) {
+function FilterChip({ active, label, onClick }: { active: boolean; label: string; onClick: () => void }) {
+  return <button type="button" aria-pressed={active} onClick={onClick} className={`text-xs ${active ? "button-primary" : "button-secondary"}`}>{label}</button>;
+}
+
+function ProfilePanel({ activeMember, childPin, childPinPending, childPinStatus, onChildPinChange, onChangeOwnChildPin }: { activeMember: Me["member"] | null; childPin: string; childPinPending: boolean; childPinStatus: string | null; onChildPinChange: (pin: string) => void; onChangeOwnChildPin: () => void }) {
   if (activeMember) return <section className="rounded-[20px] border p-5 sm:p-6" style={{ borderColor: "var(--color-border)", backgroundColor: `${activeMember.color}12` }}><p className="text-sm font-bold uppercase tracking-wide" style={{ color: activeMember.color }}>Profil aktiv</p><h2 className="mt-1 text-2xl font-semibold">{activeMember.emoji} {activeMember.display_name}</h2><InspirationalQuote key={activeMember.id} /><p className="mt-3 text-sm" style={{ opacity: 0.75 }}>{activeMember.role === "PARENT" ? "Du kannst Aufgaben verwalten und deine eigenen Aufgaben erledigen." : "Du kannst deine Aufgaben erledigen oder einen halben Anteil übernehmen."}</p>{activeMember.role === "CHILD" && <div className="mt-4 border-t pt-4" style={{ borderColor: "var(--color-border)" }}><p className="text-sm font-bold">Eigene PIN ändern</p><div className="mt-2 flex flex-wrap gap-2"><input type="password" inputMode="numeric" pattern="[0-9]{6}" maxLength={6} value={childPin} onChange={(event) => onChildPinChange(event.target.value.replace(/\D/g, ""))} placeholder="Neue 6-stellige PIN" className="input max-w-52 py-2" aria-label="Neue eigene PIN" /><button type="button" disabled={childPinPending} onClick={onChangeOwnChildPin} className="touch-action cursor-pointer rounded-xl px-3 py-2 text-sm font-bold text-white disabled:opacity-50" style={{ backgroundColor: "var(--color-primary)" }}>PIN speichern</button></div>{childPinStatus && <p className="mt-2 text-sm font-semibold" style={{ color: childPinStatus.startsWith("Deine") ? "var(--color-secondary)" : "var(--color-destructive)" }}>{childPinStatus}</p>}</div>}</section>;
-  return <section className="rounded-[20px] border p-5 sm:p-6" style={{ borderColor: "var(--color-border)" }}><p className="text-sm font-bold uppercase tracking-wide" style={{ color: "var(--color-primary)" }}>PIN-Login</p><h2 className="mt-1 text-2xl font-semibold">Wer hilft heute mit?</h2><p className="mt-1 text-sm" style={{ opacity: 0.7 }}>Tippe oben auf das Profil-Symbol, um dich mit deiner sechsstelligen PIN anzumelden.</p></section>;
+  return <PinLogin />;
 }
 
 function InspirationalQuote() {
   const [inspiration] = useState(randomInspiration);
   return <p className="mt-2 text-base font-semibold leading-snug" style={{ color: "var(--color-foreground)", opacity: 0.8 }}>„{inspiration.text}“ <span className="whitespace-nowrap">— {inspiration.author}</span></p>;
 }
-
-function Scoreboard({ stats }: { stats: MemberWeeklyStats[] }) {
-  return <section className="rounded-[20px] border p-5 sm:p-6" style={{ borderColor: "var(--color-border)", backgroundColor: "var(--color-muted)" }}><div className="flex items-center gap-2"><Crown /><div><p className="text-sm font-bold uppercase tracking-wide" style={{ color: "var(--color-accent)" }}>Scoreboard</p><h2 className="text-2xl font-semibold">Wer ist Super-Buchi?</h2></div></div><ol className="mt-4 space-y-2">{stats.map((stat, index) => { const leader = index === 0; return <li key={stat.member_id} className="flex items-center gap-3 rounded-2xl px-3 py-2" style={{ backgroundColor: leader ? "#fef3c7" : "var(--color-background)", color: leader ? "#451a03" : "var(--color-foreground)", border: leader ? "1px solid #f59e0b" : "1px solid transparent" }}><span className="w-6 text-center font-bold" style={{ color: leader ? "#92400e" : stat.color }}>{index + 1}</span><span className="text-xl">{stat.emoji}</span><span className="min-w-0 flex-1 truncate font-bold">{stat.display_name}</span><span className="text-sm font-bold" style={{ color: leader ? "#78350f" : "var(--color-foreground)", opacity: leader ? 1 : 0.7 }}>{formatTasks(stat.completed_tasks)}</span><span className="rounded-full px-3 py-1 font-bold" style={{ backgroundColor: leader ? "#b45309" : stat.color, color: "#ffffff" }}>{formatPoints(stat.points)} P</span></li>; })}</ol></section>;
-}
-
-function QuickTaskOverview({ instances, currentMemberId, isParent, onComplete, onShare, onReopen, onUndo }: { instances: Instance[]; currentMemberId: number | null; isParent: boolean; onComplete: (id: number) => void; onShare: (id: number) => void; onReopen: (id: number) => void; onUndo: (id: number) => void }) {
-  const open = instances.filter((instance) => instance.status !== "DONE").slice(0, 4);
-  return <section className="rounded-[20px] border p-5 sm:p-6" style={{ borderColor: "var(--color-border)", backgroundColor: "var(--color-background)" }}><div className="flex flex-wrap items-center justify-between gap-3"><div><p className="text-sm font-bold uppercase tracking-wide" style={{ color: "var(--color-secondary)" }}>Schnellüberblick</p><h2 className="text-2xl font-semibold">Offene Aufgaben</h2></div><Link href="/tasks" className="button-secondary">Alle Aufgaben</Link></div><ul className="mt-4 grid gap-3">{open.length > 0 ? open.map((instance) => <TaskCard key={instance.id} instance={instance} onComplete={onComplete} onShare={onShare} onReopen={isParent ? onReopen : undefined} onUndo={onUndo} canUndo={Boolean(currentMemberId && instance.contributions.some((contribution) => contribution.member_id === currentMemberId))} showCompletionDetails />) : <li className="rounded-2xl border border-dashed p-6 text-center" style={{ borderColor: "var(--color-border)" }}>Alles erledigt – super!</li>}</ul></section>;
-}
-
-function TaskSections({ instances, currentMemberId, isParent, onComplete, onShare, onReopen, onUndo }: { instances: Instance[]; currentMemberId: number | null; isParent: boolean; onComplete: (id: number) => void; onShare: (id: number) => void; onReopen: (id: number) => void; onUndo: (id: number) => void }) {
-  return <motion.ul className="grid gap-3 lg:grid-cols-2" initial="hidden" animate="visible" variants={{ hidden: {}, visible: { transition: { staggerChildren: 0.04 } } }}><AnimatePresence>{instances.map((instance) => <TaskCard key={instance.id} instance={instance} onComplete={onComplete} onShare={onShare} onReopen={isParent ? onReopen : undefined} onUndo={onUndo} canUndo={Boolean(currentMemberId && instance.contributions.some((contribution) => contribution.member_id === currentMemberId))} showCompletionDetails />)}</AnimatePresence></motion.ul>;
-}
-
-function FilterChip({ active, label, color, onClick }: { active: boolean; label: string; color?: string; onClick: () => void }) { return <button type="button" onClick={onClick} className="cursor-pointer rounded-full border px-3 py-1.5 text-sm font-bold" style={{ borderColor: active ? color ?? "var(--color-primary)" : "var(--color-border)", backgroundColor: active ? `${color ?? "#2563eb"}1a` : "transparent" }}>{label}</button>; }
-function Crown() { return <svg aria-hidden="true" width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="var(--color-accent)" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="m3 7 4 4 5-7 5 7 4-4-2 12H5z" /><path d="M5 21h14" /></svg>; }
-function currentWeekBounds() { const today = new Date(); const start = new Date(today.getFullYear(), today.getMonth(), today.getDate() - today.getDay()); const end = new Date(start); end.setDate(start.getDate() + 6); return { start, end }; }
-function formatDate(date: Date) { return new Intl.DateTimeFormat("de-DE", { day: "2-digit", month: "2-digit" }).format(date); }
-function formatLongDate(date: Date) { return new Intl.DateTimeFormat("de-DE", { weekday: "long", day: "2-digit", month: "long", year: "numeric" }).format(date); }
-function formatTasks(value: number) { return `${value % 1 ? value.toFixed(1).replace(".", ",") : value} Aufgaben`; }
-function formatPoints(value: number) { return value % 1 ? value.toFixed(1).replace(".", ",") : value; }

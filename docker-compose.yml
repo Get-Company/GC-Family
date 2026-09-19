@@ -30,6 +30,9 @@ services:
       DJANGO_CSRF_COOKIE_SECURE: ${DJANGO_CSRF_COOKIE_SECURE:-True}
       CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-http://localhost:3000}
       CSRF_TRUSTED_ORIGINS: ${CSRF_TRUSTED_ORIGINS:-http://localhost:3000}
+      HOME_ASSISTANT_URL: ${HOME_ASSISTANT_URL:-}
+      HOME_ASSISTANT_TOKEN: ${HOME_ASSISTANT_TOKEN:-}
+      GC_FAMILY_PUBLIC_URL: ${GC_FAMILY_PUBLIC_URL:-}
       DB_HOST: db
       DB_PORT: "5432"
       DB_NAME: ${DB_NAME:-gcfamily}
@@ -49,18 +52,16 @@ services:
       DJANGO_SECRET_KEY: ${DJANGO_SECRET_KEY:?bitte in .env setzen}
       DJANGO_DEBUG: ${DJANGO_DEBUG:-False}
       DJANGO_ALLOWED_HOSTS: ${DJANGO_ALLOWED_HOSTS:-localhost,127.0.0.1,backend}
+      HOME_ASSISTANT_URL: ${HOME_ASSISTANT_URL:-}
+      HOME_ASSISTANT_TOKEN: ${HOME_ASSISTANT_TOKEN:-}
+      GC_FAMILY_PUBLIC_URL: ${GC_FAMILY_PUBLIC_URL:-}
       DB_HOST: db
       DB_PORT: "5432"
       DB_NAME: ${DB_NAME:-gcfamily}
       DB_USER: ${DB_USER:-gcfamily}
       DB_PASSWORD: ${DB_PASSWORD:-changeme}
     entrypoint: []
-    command:
-      - /bin/sh
-      - -c
-      - >-
-        until python manage.py materialize_chores --horizon 21; do sleep 10; done;
-        while sleep 3600; do python manage.py materialize_chores --horizon 21; done
+    command: ["python", "manage.py", "run_scheduler"]
 
   frontend:
     build:

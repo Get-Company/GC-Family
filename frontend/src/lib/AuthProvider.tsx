@@ -70,9 +70,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setActiveToken(null);
     store(LEGACY_DEVICE_TOKEN_KEY, null);
     store(REFRESH_TOKEN_KEY, null);
-    // Ein kompletter Seitenwechsel verhindert, dass eine alte Route mit
-    // zwischengespeichertem Auth-State direkt wieder zum Dashboard umleitet.
-    window.location.assign("/login");
+    setState({ kind: "anonymous" });
   }, [setActiveToken]);
 
   useEffect(() => {

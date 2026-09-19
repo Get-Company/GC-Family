@@ -28,6 +28,7 @@ class MemberOut(Schema):
 
 class ManagedMemberOut(MemberOut):
     email: str | None
+    notification_service: str
 
     @staticmethod
     def resolve_email(obj: FamilyMember) -> str | None:
