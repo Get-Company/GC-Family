@@ -47,7 +47,7 @@ export function TaskTile({ task, memberId, isParent, pending, onAction }: Props)
         {canUndoAlways && <button type="button" disabled={pending} onClick={() => void onAction(task, "always_undo")} className="button-secondary text-xs">Letzte Erledigung zurücknehmen</button>}
         {ownShare && <button type="button" disabled={pending} onClick={() => void onAction(task, "undo")} className="button-secondary text-xs">Meinen Anteil zurücknehmen</button>}
         {!ownShare && isParent && instance?.status === "DONE" && <button type="button" disabled={pending} onClick={() => void onAction(task, "reopen")} className="button-secondary text-xs">Wieder öffnen</button>}
-        {task.available && !canShare && !ownShare && <p className="text-[11px]" style={{ color: "var(--color-subtle-text)" }}>Diese Aufgabe ist {task.assigned_member_names.join(" und ")} zugewiesen.</p>}
+        {!alwaysAvailable && task.available && !canShare && !ownShare && <p className="text-[11px]" style={{ color: "var(--color-subtle-text)" }}>Diese Aufgabe ist {task.assigned_member_names.join(" und ")} zugewiesen.</p>}
       </div>}
     </div>}
   </li>;
