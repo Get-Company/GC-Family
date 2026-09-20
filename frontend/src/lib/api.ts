@@ -22,6 +22,19 @@ export class ApiError extends Error {
   }
 }
 
+function errorMessage(status: number, body: unknown) {
+  const detail = body && typeof body === "object" && "detail" in body ? body.detail : null;
+  if (typeof detail === "string") return detail;
+  if (Array.isArray(detail)) {
+    const message = detail.find((item) => item && typeof item === "object" && "msg" in item && typeof item.msg === "string")?.msg;
+    if (message) return `${message} (HTTP ${status})`;
+  }
+  if (status === 422) return "Die Anfrage enthält ungültige Angaben (HTTP 422).";
+  if (status === 409) return "Diese Aufgabe ist momentan nicht verfügbar (HTTP 409).";
+  if (status >= 500) return `Der Server konnte die Anfrage nicht verarbeiten (HTTP ${status}).`;
+  return `Die Anfrage konnte nicht verarbeitet werden (HTTP ${status}).`;
+}
+
 export function setAccessToken(token: string | null) {
   accessToken = token;
 }
@@ -52,7 +65,7 @@ async function apiRequest<T>(
       unauthorizedHandler?.();
     }
     const body = await res.json().catch(() => null);
-    throw new ApiError(res.status, typeof body?.detail === "string" ? body.detail : "Die Anfrage konnte nicht verarbeitet werden.");
+    throw new ApiError(res.status, errorMessage(res.status, body));
   }
   if (res.status === 204) {
     return undefined as T;
