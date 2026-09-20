@@ -8,7 +8,7 @@ from django.db.models import DateTimeField, OuterRef, Q, Subquery
 from django.db.models.functions import Coalesce
 from django.utils import timezone
 
-from chores.models import ChoreCompletion, ChoreInstance
+from chores.models import ALWAYS_AVAILABLE_COOLDOWN, ChoreCompletion, ChoreInstance
 from chores.services import instance_is_current, materialize_household, next_occurrence
 
 
@@ -20,6 +20,7 @@ def with_instance_details(queryset):
 
 def task_board(household, today: dt.date | None = None) -> list[dict]:
     today = today or timezone.localdate()
+    now = timezone.now()
     materialize_household(household, start=today, horizon_days=0)
     today_completions: dict[int, list[ChoreCompletion]] = {}
     for completion in ChoreCompletion.objects.filter(
@@ -28,6 +29,13 @@ def task_board(household, today: dt.date | None = None) -> list[dict]:
         completed_at__date=today,
     ).select_related("member").order_by("-completed_at"):
         today_completions.setdefault(completion.chore_id, []).append(completion)
+    recent_completions: dict[int, ChoreCompletion] = {}
+    for completion in ChoreCompletion.objects.filter(
+        chore__household=household,
+        chore__is_always_available=True,
+        completed_at__gt=now - ALWAYS_AVAILABLE_COOLDOWN,
+    ).select_related("member").order_by("-completed_at"):
+        recent_completions.setdefault(completion.chore_id, completion)
     base = ChoreInstance.objects.filter(chore_id=OuterRef("pk"))
     current = base.filter(due_date__lte=today).filter(
         Q(active_until__gte=today) | Q(active_until__isnull=True, due_date=today)
@@ -51,7 +59,10 @@ def task_board(household, today: dt.date | None = None) -> list[dict]:
         last = None if always_available else instances.get(chore.completed_id)
         upcoming_instance = None if always_available else instances.get(chore.upcoming_id)
         rule = getattr(chore, "recurrence", None)
-        available = always_available or bool(
+        available_again_at = None
+        if always_available and (recent_completion := recent_completions.get(chore.id)):
+            available_again_at = recent_completion.completed_at + ALWAYS_AVAILABLE_COOLDOWN
+        available = (always_available and available_again_at is None) or bool(
             instance
             and instance_is_current(instance, today)
             and instance.status in {"OPEN", "PARTIAL"}
@@ -82,6 +93,7 @@ def task_board(household, today: dt.date | None = None) -> list[dict]:
             "is_always_available": always_available,
             "completion_count_today": len(completions),
             "latest_always_available_completion": completions[0] if completions else None,
+            "always_available_again_at": available_again_at,
             "available": available,
             "next_available_on": next_date,
             "instance": instance,

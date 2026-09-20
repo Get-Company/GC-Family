@@ -1,6 +1,11 @@
+import datetime as dt
+
 from django.db import models
 
 from accounts.models import FamilyMember, Household, User
+
+
+ALWAYS_AVAILABLE_COOLDOWN = dt.timedelta(hours=2)
 
 
 class Chore(models.Model):

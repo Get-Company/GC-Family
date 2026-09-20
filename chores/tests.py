@@ -2,9 +2,10 @@ import datetime as dt
 import json
 
 from django.test import TestCase
+from django.utils import timezone
 
 from accounts.models import FamilyMember, Household, User
-from chores.models import Chore, ChoreInstance, RecurrenceRule
+from chores.models import ALWAYS_AVAILABLE_COOLDOWN, Chore, ChoreInstance, RecurrenceRule
 from chores.services import materialize_chore
 
 
@@ -239,6 +240,12 @@ class ChoreAuthorizationTests(TestCase):
         first = self._post(
             f"/api/chores/{created.json()['id']}/complete", {}, child_token
         )
+        blocked = self._post(
+            f"/api/chores/{created.json()['id']}/complete", {}, child_token
+        )
+        first_completion = Chore.objects.get(id=created.json()["id"]).always_available_completions.get()
+        first_completion.completed_at = timezone.now() - ALWAYS_AVAILABLE_COOLDOWN - dt.timedelta(minutes=1)
+        first_completion.save(update_fields=["completed_at"])
         second = self._post(
             f"/api/chores/{created.json()['id']}/complete", {}, child_token
         )
@@ -257,12 +264,13 @@ class ChoreAuthorizationTests(TestCase):
         self.assertEqual(created.status_code, 200)
         self.assertTrue(created.json()["is_always_available"])
         self.assertEqual(first.status_code, 200)
+        self.assertEqual(blocked.status_code, 409)
         self.assertEqual(second.status_code, 200)
-        self.assertTrue(task["available"])
+        self.assertFalse(task["available"])
         self.assertIsNone(task["instance"])
-        self.assertEqual(task["completion_count_today"], 2)
+        self.assertIsNotNone(task["always_available_again_at"])
         self.assertEqual(task["latest_always_available_completion"]["member_id"], self.child.id)
-        self.assertEqual(stats["points"], 6.0)
+        self.assertEqual(stats["points"], 3.0 * task["completion_count_today"])
         self.assertEqual(undone.status_code, 204)
 
     def test_daily_recurrence_keeps_completed_history_and_creates_a_fresh_day(self):

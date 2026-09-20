@@ -386,7 +386,7 @@ export interface paths {
         put?: never;
         /**
          * Undo Always Available Completion
-         * @description Nimmt die jüngste eigene Erledigung zurück; Eltern dürfen jede löschen.
+         * @description Nimmt eine eigene Erledigung zurück; Eltern dürfen jede löschen.
          */
         post: operations["chores_api_undo_always_available_completion"];
         delete?: never;
@@ -877,6 +877,8 @@ export interface components {
             /** Completion Count Today */
             completion_count_today: number;
             latest_always_available_completion: components["schemas"]["ChoreCompletionOut"] | null;
+            /** Always Available Again At */
+            always_available_again_at: string | null;
             /** Available */
             available: boolean;
             /** Next Available On */

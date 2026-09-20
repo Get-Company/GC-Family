@@ -15,7 +15,7 @@ from ninja.files import UploadedFile
 
 from accounts.auth import current_auth, family_jwt_auth, require_parent
 from accounts.models import FamilyMember, Household
-from chores.models import Chore, ChoreCompletion, ChoreContribution, ChoreInstance, RecurrenceRule
+from chores.models import ALWAYS_AVAILABLE_COOLDOWN, Chore, ChoreCompletion, ChoreContribution, ChoreInstance, RecurrenceRule
 from chores.services import DEFAULT_HORIZON_DAYS, instance_is_current, materialize_chore
 from chores.board import task_board, with_instance_details
 
@@ -171,6 +171,7 @@ class BoardTaskOut(Schema):
     is_always_available: bool
     completion_count_today: int
     latest_always_available_completion: ChoreCompletionOut | None
+    always_available_again_at: dt.datetime | None
     available: bool
     next_available_on: dt.date | None
     instance: InstanceOut | None
@@ -481,6 +482,10 @@ def complete_always_available_chore(request, chore_id: int):
         assigned_ids.add(chore.default_assignee_id)
     if assigned_ids and auth.member.id not in assigned_ids:
         raise HttpError(403, "Diese Aufgabe ist nicht dir zugewiesen.")
+    latest = chore.always_available_completions.order_by("-completed_at").first()
+    if latest and (available_again_at := latest.completed_at + ALWAYS_AVAILABLE_COOLDOWN) > timezone.now():
+        formatted = timezone.localtime(available_again_at).strftime("%H:%M Uhr")
+        raise HttpError(409, f"Diese Aufgabe kann erst wieder ab {formatted} erledigt werden.")
     return ChoreCompletion.objects.create(chore=chore, member=auth.member)
 
 
