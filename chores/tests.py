@@ -1,7 +1,7 @@
 import datetime as dt
 import json
 
-from django.test import TestCase
+from django.test import TestCase, TransactionTestCase
 from django.utils import timezone
 
 from accounts.models import FamilyMember, Household, User
@@ -555,3 +555,55 @@ class ChoreAuthorizationTests(TestCase):
         )
         self.assertEqual(deleted.status_code, 204)
         self.assertFalse(Chore.objects.filter(id=chore_id).exists())
+
+
+class AlwaysAvailableEndpointTransactionTests(TransactionTestCase):
+    """Die Endpunkte müssen ihre eigene DB-Transaktion öffnen.
+
+    TestCase umschließt jeden Test bereits mit einer Transaktion. TransactionTestCase
+    bildet dagegen die Gunicorn-Anfrage nach und deckt fehlende atomare Blöcke auf.
+    """
+
+    def setUp(self):
+        self.parent = User.objects.create_user(
+            email="eltern@example.test",
+            username="eltern@example.test",
+            password="sicheres-passwort",
+        )
+        household = Household.objects.create(name="Familie Test", owner=self.parent)
+        FamilyMember.objects.create(
+            household=household,
+            user=self.parent,
+            display_name="Elternteil",
+            role=FamilyMember.Role.PARENT,
+        )
+        self.chore = Chore.objects.create(
+            household=household,
+            title="Küche aufräumen",
+            is_always_available=True,
+            created_by=self.parent,
+        )
+
+    def _post(self, path: str, payload: dict[str, object], token: str | None = None):
+        headers = {"content_type": "application/json"}
+        if token:
+            headers["HTTP_AUTHORIZATION"] = f"Bearer {token}"
+        return self.client.post(path, data=json.dumps(payload), **headers)
+
+    def test_complete_and_undo_open_a_transaction(self):
+        login = self._post(
+            "/api/auth/login",
+            {"email": self.parent.email, "password": "sicheres-passwort"},
+        )
+        self.assertEqual(login.status_code, 200)
+        token = login.json()["access"]
+
+        completed = self._post(f"/api/chores/{self.chore.id}/complete", {}, token)
+        self.assertEqual(completed.status_code, 200)
+
+        undone = self._post(
+            f"/api/chores/always-available-completions/{completed.json()['id']}/undo",
+            {},
+            token,
+        )
+        self.assertEqual(undone.status_code, 204)

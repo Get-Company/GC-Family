@@ -466,8 +466,8 @@ def stats(request):
     return {"points_today": points_today, "current_streak": streak}
 
 
-@transaction.atomic
 @router.post("/{chore_id}/complete", response=ChoreCompletionOut)
+@transaction.atomic
 def complete_always_available_chore(request, chore_id: int):
     """Speichert eine weitere Erledigung einer dauerhaft verfügbaren Aufgabe."""
     auth = current_auth(request)
@@ -489,8 +489,8 @@ def complete_always_available_chore(request, chore_id: int):
     return ChoreCompletion.objects.create(chore=chore, member=auth.member)
 
 
-@transaction.atomic
 @router.post("/always-available-completions/{completion_id}/undo", response={204: None})
+@transaction.atomic
 def undo_always_available_completion(request, completion_id: int):
     """Nimmt eine eigene Erledigung zurück; Eltern dürfen jede löschen."""
     auth = current_auth(request)
