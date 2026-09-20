@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { PinLogin } from "@/components/PinLogin";
+import { Celebration } from "@/components/Celebration";
 import { TaskTile } from "@/components/TaskTile";
 import { Scoreboard } from "@/components/Scoreboard";
 import { ApiError, completeAlwaysAvailableChore, completeInstance, getDashboard, getPublicDashboard, reopenInstance, undoAlwaysAvailableCompletion, uncompleteInstance, updateOwnChildPin, type BoardTask, type Me, type PublicDashboard } from "@/lib/api";
@@ -19,6 +20,7 @@ export default function Dashboard() {
   const [filter, setFilter] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [pendingId, setPendingId] = useState<number | null>(null);
+  const [celebration, setCelebration] = useState(0);
   const actionPending = useRef(false);
   const requestId = useRef(0);
   const [newChildPin, setNewChildPin] = useState("");
@@ -31,6 +33,12 @@ export default function Dashboard() {
   const authenticated = authState.kind === "authenticated";
   const canAccessBackend = authenticated && Boolean(authState.me.user?.can_access_backend);
   const view = pathname === "/scoreboard" ? "scoreboard" : pathname === "/profile" ? "profile" : "tasks";
+
+  useEffect(() => {
+    if (!celebration) return;
+    const timer = window.setTimeout(() => setCelebration(0), 1600);
+    return () => window.clearTimeout(timer);
+  }, [celebration]);
 
   const loadDashboard = useCallback(async () => {
     const id = ++requestId.current;
@@ -61,6 +69,7 @@ export default function Dashboard() {
       if (action === "always_complete") {
         const completion = await completeAlwaysAvailableChore(task.id);
         setDashboard((current) => current ? { ...current, tasks: current.tasks.map((item) => item.id === task.id ? { ...item, completion_count_today: item.completion_count_today + 1, latest_always_available_completion: completion } : item) } : current);
+        setCelebration((current) => current + 1);
         playJingle(currentMember.completion_jingle);
         void loadDashboard().catch(() => {});
         return;
@@ -77,6 +86,7 @@ export default function Dashboard() {
         : action === "reopen" ? await reopenInstance(task.instance.id)
         : await completeInstance(task.instance.id, currentMember.id, action === "share");
       setDashboard((current) => current ? { ...current, tasks: current.tasks.map((item) => item.id === task.id ? { ...item, instance, available: instance.status === "OPEN" || instance.status === "PARTIAL", last_completion: instance.status === "DONE" ? instance : item.last_completion?.id === instance.id ? null : item.last_completion } : item) } : current);
+      if (action === "complete") setCelebration((current) => current + 1);
       playJingle(action === "undo" || action === "reopen" ? currentMember.undo_jingle : currentMember.completion_jingle);
       void loadDashboard().catch(() => {});
     } catch (caught) {
@@ -95,6 +105,7 @@ export default function Dashboard() {
 
   const visible = dashboard?.tasks.filter((task) => filter === null || task.assigned_member_ids.length === 0 || task.assigned_member_ids.includes(filter)) ?? [];
   return <main className="mx-auto w-full max-w-4xl flex-1 px-4 py-6 sm:px-6 sm:py-8">
+    {celebration > 0 && <Celebration key={celebration} />}
     <header className="mb-5 flex flex-wrap items-center justify-between gap-3">
       <h1 className="text-2xl font-semibold sm:text-3xl">{view === "tasks" ? "Aufgaben" : view === "scoreboard" ? "Scoreboard" : "Mein Profil"}</h1>
       {currentMember && <div className="flex flex-wrap gap-2">{isParent && <Link href="/history" className="button-secondary text-xs">Verlauf</Link>}{canAccessBackend && <Link href="/admin/" className="button-secondary text-xs">Backend</Link>}<button type="button" onClick={logout} className="button-secondary text-xs">Abmelden</button></div>}
